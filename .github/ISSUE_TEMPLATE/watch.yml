@@ -6,6 +6,7 @@ body:
   - type: markdown
     attributes:
       value: |
+        **Most contributors can submit this as-is:** you'll get new PRs that change code you wrote or approved.
         Anyone can subscribe. Matching PRs are posted as comments here. A preview appears right after you submit.
         Edit to change your rules, close to stop. Rules are public; max 3 subscriptions per person.
   - type: textarea
@@ -23,8 +24,10 @@ body:
       render: yaml
       value: |
         match:
-          paths:
-            - modules/gdscript/   # replace with your own
-          my_lines: [20%, 40]
+          my_lines: [20%, 40]   # PRs where ≥20% or ≥40 of the changed lines are yours or approved by you
+          # paths:              # uncomment to also watch areas, e.g.:
+          #   - modules/gdscript/
+          #   - "**/*.glsl"
+          # labels: [topic:gdscript]
     validations:
       required: true

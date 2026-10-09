@@ -8,7 +8,9 @@ unofficial community tool, not run by the Godot project.
 
 ## Usage
 
-[Open a "Watch pull requests" issue](../../issues/new/choose), put in your rules, submit.
+[Open a "Watch pull requests" issue](../../issues/new/choose) and submit it. The default rules get
+you new PRs that change code you wrote or approved, which suits most contributors. Add paths or
+labels to also watch areas.
 
 - A bot comment shows what the rules would have matched in the last 30 days, or what's wrong with
   them. It updates when you edit the issue.
