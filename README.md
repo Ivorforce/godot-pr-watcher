@@ -8,17 +8,14 @@ unofficial community tool, not run by the Godot project.
 
 ## Usage
 
-[Open a "Watch pull requests" issue](../../issues/new/choose) and submit it. The default rules get
-you new PRs that change code you wrote or approved, which suits most contributors. Add paths or
-labels to also watch areas.
+[Open a "Watch pull requests" issue](../../issues/new/choose) and submit it. You can accept the defaults,
+which watches when somebody changes code you wrote or reviewed. Or you can edit it to suit your needs.
 
-- A bot comment shows what the rules would have matched in the last 30 days, or what's wrong with
-  them. It updates when you edit the issue.
-- Matching PRs then arrive as digest comments on your issue, so you get normal GitHub
-  notifications. Older digests get collapsed. Each digest links an Atom feed too.
+- First, a bot will reply to let you know your watcher is in effect.
+- Then you'll get updates about new PRs in digests, as new comments.
 - Edit the issue to change rules, close it to stop.
 
-Rules are public. Max 3 open subscriptions per person (no limit for collaborators on this repo). Bugs or questions: open a blank issue.
+Rules are public. Max 3 open subscriptions per person (no limit for collaborators on this repo).
 
 ## Rules
 
