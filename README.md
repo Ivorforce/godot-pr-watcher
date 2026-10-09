@@ -68,8 +68,8 @@ Code is in `watcher/`. `match.py` (rules) and `index.py` (blame) are the interes
 1. Copy this repo (e.g. "Use this template"). Don't fork: forks start with scheduled workflows disabled.
 2. Set `target` in `config.yml`. If you change `label`, also change it in
    `.github/ISSUE_TEMPLATE/watch.yml` and `.github/workflows/preview.yml`.
-3. Run the `watch` workflow by hand. That creates the `data` branch and the label. The 30-day
-   backfill then takes a few hours of hourly runs (API rate limit).
+3. Run the `watch` workflow by hand with `budget` 600. That creates the `data` branch and the label,
+   and indexes the last 30 days (about 5 minutes for Godot).
 4. Settings → Pages: deploy from the `data` branch, `/docs` folder.
 
 GitHub disables scheduled workflows after 60 days without repo activity. If that happens,
