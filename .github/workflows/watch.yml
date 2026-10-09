@@ -1,0 +1,63 @@
+name: watch
+
+on:
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+    inputs:
+      budget:
+        description: "Seconds to spend analysing PRs (raise for the first backfill)"
+        default: "40"
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: watch
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check out state (data branch)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          url="https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          # Start empty only if the branch definitely doesn't exist (exit code 2), never on a
+          # transient error: empty state would re-send every notification.
+          rc=0; git ls-remote --exit-code --heads "$url" data >/dev/null || rc=$?
+          if [ "$rc" = 0 ]; then
+            git clone --quiet --depth=1 --branch data "$url" data
+          elif [ "$rc" = 2 ]; then
+            git init --quiet -b data data && git -C data remote add origin "$url"
+          else
+            exit 1
+          fi
+
+      - run: pip install --quiet -r requirements.txt
+
+      - name: Run
+        id: run
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BUDGET: ${{ inputs.budget || '40' }}
+        run: python -m watcher run --budget "$BUDGET"
+
+      # Runs even if the previous step failed, so digests that went out are never re-sent.
+      # The data branch is kept as a single commit, so its history doesn't grow.
+      - name: Save state
+        if: always() && steps.run.outcome != 'skipped'
+        run: |
+          cd data
+          git add -A
+          if git rev-parse -q --verify HEAD >/dev/null && git diff --cached --quiet; then exit 0; fi
+          git checkout --quiet --orphan state
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit --quiet -m "Update state"
+          git push --quiet --force origin state:data

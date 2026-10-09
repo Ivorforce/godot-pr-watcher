@@ -1,0 +1,23 @@
+# Repository whose pull requests are watched. To adopt this for another repository,
+# this is usually the only line to change.
+target: godotengine/godot
+
+# Open issues with this label are subscriptions. The issue form applies it automatically.
+label: watch
+
+# Vendored, generated and translation files: never matched, and not counted for `my_lines`.
+exclude_paths:
+  - "/thirdparty/"
+  - "*.po"
+  - "*.pot"
+  - "*.gen.*"
+
+# PRs created within this many days are indexed. Also how far back the preview looks.
+index_window_days: 30
+
+# Digest cadence for subscriptions that don't set one: hourly, daily or weekly.
+default_digest: daily
+
+# Where the GitHub Pages site (PR redirects, feeds) is served.
+# Defaults to https://<owner>.github.io/<repo> of the repository running the workflows.
+# site_url: https://example.github.io/godot-pr-watcher

@@ -1,0 +1,30 @@
+name: Watch pull requests
+description: Get notified about new pull requests that match your rules.
+title: "Watch: "
+labels: ["watch"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Matching PRs are posted as comments here. A preview appears right after you submit.
+        Edit to change your rules, close to stop. Rules are public; max 3 subscriptions per person.
+  - type: textarea
+    id: rules
+    attributes:
+      label: Rules
+      description: |
+        YAML. A PR matches if anything under `match:` matches and nothing under `ignore:` does.
+        - `paths`: from the repo root, e.g. `modules/gdscript/`. Use `**/` for anywhere, and quote patterns starting with `*`: `"**/*.glsl"`.
+        - `my_lines`: `20%` (share of the lines a PR changes that you wrote or approved), `40` (line count), or both: `[20%, 40]`.
+        - `authors`, `labels`, `milestones`, `branches`: lists of names.
+        - `ignore:` takes the same keys, except `my_lines`.
+        - `include:` any of `drafts`, `own` (your PRs), `other_branches` (non-master); all off by default.
+        - `digest`: `hourly`, `daily` (default) or `weekly`.
+      render: yaml
+      value: |
+        match:
+          paths:
+            - modules/gdscript/   # replace with your own
+          my_lines: [20%, 40]
+    validations:
+      required: true

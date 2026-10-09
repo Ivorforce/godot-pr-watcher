@@ -1,0 +1,38 @@
+name: preview
+
+on:
+  issues:
+    types: [opened, edited, reopened, labeled]
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: preview-${{ github.event.issue.number }}
+  cancel-in-progress: true
+
+jobs:
+  preview:
+    # Only subscription issues; keep the label in sync with `label` in config.yml.
+    # The issue body is untrusted: it's never interpolated here, only read by the script via the API.
+    if: contains(github.event.issue.labels.*.name, 'watch')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check out state (data branch)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          url="https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git clone --quiet --depth=1 --branch data "$url" data || mkdir -p data
+
+      - run: pip install --quiet -r requirements.txt
+
+      - name: Preview
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE: ${{ github.event.issue.number }}
+        run: python -m watcher preview --issue "$ISSUE"
