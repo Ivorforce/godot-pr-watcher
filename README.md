@@ -61,6 +61,10 @@ Code is in `watcher/`. `match.py` (rules) and `index.py` (blame) are the interes
 
 ## Running your own
 
+> [!NOTE]
+> If you want to watch Godot, subscribe by opening an issue.
+> You only need to copy this repo if you want to set it up to watch another repository.
+
 1. Copy this repo (e.g. "Use this template"). Don't fork: forks start with scheduled workflows disabled.
 2. Set `target` in `config.yml`. If you change `label`, also change it in
    `.github/ISSUE_TEMPLATE/watch.yml` and `.github/workflows/preview.yml`.
