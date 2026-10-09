@@ -2,6 +2,7 @@ name: watch
 
 on:
   schedule:
+    # Off the full hour, when GitHub's scheduler is busiest and more likely to drop runs.
     - cron: "17 * * * *"
   workflow_dispatch:
     inputs:
