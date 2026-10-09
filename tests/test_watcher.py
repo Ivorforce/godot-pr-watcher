@@ -198,11 +198,13 @@ class RenderTest(unittest.TestCase):
 
     def test_done_prs_struck_through(self):
         from watcher.render import pr_line
-        line = pr_line(CFG, pr(n=5, title="a ~~b", state="merged"), ["x"])
-        self.assertTrue(line.startswith("- ~~[PR 5]"))
-        self.assertIn("~~ (merged) — by", line)
+        line = pr_line(CFG, pr(n=5, title="a ~~b [c]", state="merged"), ["x"])
+        self.assertTrue(line.startswith("- ~~[a "))
+        self.assertIn("~~ (merged) — [someone](https://github.com/someone)", line)
         self.assertNotIn("~~b", line)
-        self.assertTrue(pr_line(CFG, pr(n=5), ["x"]).startswith("- [PR 5]"))
+        self.assertIn("\\[c\\]", line)  # brackets in titles can't break the link
+        self.assertIn("<sub>PR 5 · x</sub>", line)
+        self.assertTrue(pr_line(CFG, pr(n=5), ["x"]).startswith("- [t]("))
 
     def test_defuse_gh_reference(self):
         self.assertNotIn("GH-12", defuse("see GH-12"))

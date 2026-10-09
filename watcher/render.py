@@ -32,14 +32,18 @@ def code_span(text: str, limit: int = 80) -> str:
 
 
 def pr_line(cfg: Config, rec: dict, reasons: list[str]) -> str:
-    title = defuse(rec.get("title", ""))
+    """Title (linked) and author on the first line; number and why it matched small below.
+    Authors link to their profile: blue like a mention, but a plain link notifies nobody."""
+    title = defuse(rec.get("title", "")).replace("[", "\\[").replace("]", "\\]").replace("~", "~" + ZWSP)
     if len(title) > 100:
         title = title[:99] + "…"
-    pr = f"[PR {rec['n']}]({cfg.pr_link(rec['n'])}) {title}"
+    pr = f"[{title}]({cfg.pr_link(rec['n'])})"
     if rec.get("state") in STATE_NOTE:  # merged or closed: struck through, so it stands out
-        pr = f"~~{pr.replace('~', '~' + ZWSP)}~~{STATE_NOTE[rec['state']]}"
-    draft = " · draft" if rec.get("draft") else ""
-    return f"- {pr} — by {defuse(rec.get('author', '?'))} · {' · '.join(reasons)}{draft}"
+        pr = f"~~{pr}~~{STATE_NOTE[rec['state']]}"
+    author = rec.get("author")
+    by = f"[{author}](https://github.com/{author})" if author and re.fullmatch(r"[a-z0-9-]+", author) else "?"
+    details = " · ".join([f"PR {rec['n']}", *reasons] + (["draft"] if rec.get("draft") else []))
+    return f"- {pr} — {by}\n  <sub>{details}</sub>"  # comments render newlines as line breaks
 
 
 def digest(cfg: Config, items: list[tuple[dict, list[str]]], more: int, feed_url: str) -> str:
