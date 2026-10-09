@@ -6,7 +6,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Matching PRs are posted as comments here. A preview appears right after you submit.
+        Anyone can subscribe. Matching PRs are posted as comments here. A preview appears right after you submit.
         Edit to change your rules, close to stop. Rules are public; max 3 subscriptions per person.
   - type: textarea
     id: rules

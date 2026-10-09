@@ -3,6 +3,9 @@
 Get notified about new [Godot](https://github.com/godotengine/godot) PRs that touch paths you pick,
 or lines you wrote or approved. Nothing is posted to the Godot repo.
 
+Anyone can subscribe: you don't need to be a maintainer or have any role in Godot. This is an
+unofficial community tool, not run by the Godot project.
+
 ## Usage
 
 [Open a "Watch pull requests" issue](../../issues/new/choose), put in your rules, submit.
