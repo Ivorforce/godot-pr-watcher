@@ -35,9 +35,11 @@ def pr_line(cfg: Config, rec: dict, reasons: list[str]) -> str:
     title = defuse(rec.get("title", ""))
     if len(title) > 100:
         title = title[:99] + "…"
-    flags = (" · draft" if rec.get("draft") else "") + STATE_NOTE.get(rec.get("state"), "")
-    return (f"- [PR {rec['n']}]({cfg.pr_link(rec['n'])}) {title} — by {defuse(rec.get('author', '?'))}"
-            f" · {' · '.join(reasons)}{flags}")
+    pr = f"[PR {rec['n']}]({cfg.pr_link(rec['n'])}) {title}"
+    if rec.get("state") in STATE_NOTE:  # merged or closed: struck through, so it stands out
+        pr = f"~~{pr.replace('~', '~' + ZWSP)}~~{STATE_NOTE[rec['state']]}"
+    draft = " · draft" if rec.get("draft") else ""
+    return f"- {pr} — by {defuse(rec.get('author', '?'))} · {' · '.join(reasons)}{draft}"
 
 
 def digest(cfg: Config, items: list[tuple[dict, list[str]]], more: int, feed_url: str) -> str:

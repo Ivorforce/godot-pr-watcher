@@ -196,6 +196,14 @@ class RenderTest(unittest.TestCase):
         self.assertEqual(code_span("a`b\nc"), "`a'b c`")
         self.assertEqual(len(code_span("x" * 500)), 82)
 
+    def test_done_prs_struck_through(self):
+        from watcher.render import pr_line
+        line = pr_line(CFG, pr(n=5, title="a ~~b", state="merged"), ["x"])
+        self.assertTrue(line.startswith("- ~~[PR 5]"))
+        self.assertIn("~~ (merged) — by", line)
+        self.assertNotIn("~~b", line)
+        self.assertTrue(pr_line(CFG, pr(n=5), ["x"]).startswith("- [PR 5]"))
+
     def test_defuse_gh_reference(self):
         self.assertNotIn("GH-12", defuse("see GH-12"))
 
