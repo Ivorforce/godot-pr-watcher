@@ -23,6 +23,7 @@ HUNK = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")
 BLAME_FILES_PER_QUERY = 5
 OBJECTS_PER_QUERY = 25
 MAX_FAILURES = 3
+COMPARE_MAX_FILES = 300  # the compare API's file limit
 MAX_BLAME_FILES = 50  # per PR, the files with the most modified lines; caps cost of mass-edit PRs
 
 
@@ -128,8 +129,23 @@ def update_index(cfg: Config, gh: GitHub, st: State, deadline: float):
 
 def analyze(cfg: Config, gh: GitHub, st: State, rec: dict, deadline: float):
     exclude = cfg.exclude_spec
+    # One compare call gives both the PR's diff (against the merge-base) and the merge-base itself.
+    # It lists at most 300 files; bigger PRs (or a failed compare) fall back to the PR's file list.
+    base, pr_files = rec["base_sha"], None
+    try:
+        cmp = gh.rest(f"repos/{cfg.target}/compare/{rec['base_sha']}...{rec['head_sha']}", {"per_page": 1})
+        base = cmp["merge_base_commit"]["sha"]
+        if len(cmp.get("files", [])) < COMPARE_MAX_FILES:
+            pr_files = cmp.get("files", [])
+    except RateLimited:
+        raise
+    except GitHubError as e:
+        log.warning("PR #%d: no merge-base (%s), blaming the base branch head", rec["n"], e)
+    if pr_files is None:
+        pr_files = gh.paginate(f"repos/{cfg.target}/pulls/{rec['n']}/files")
+
     files, ranges, skipped = [], {}, 0
-    for f in gh.paginate(f"repos/{cfg.target}/pulls/{rec['n']}/files"):
+    for f in pr_files:
         old_path = f.get("previous_filename") or f["filename"]
         files.append(f["filename"])
         if f.get("previous_filename"):
@@ -144,14 +160,6 @@ def analyze(cfg: Config, gh: GitHub, st: State, rec: dict, deadline: float):
             ranges[old_path] = lines
 
     rec["files"] = sorted(set(files))
-
-    base = rec["base_sha"]
-    if ranges:  # pure additions have nothing to blame
-        try:
-            cmp = gh.rest(f"repos/{cfg.target}/compare/{rec['base_sha']}...{rec['head_sha']}", {"per_page": 1})
-            base = cmp["merge_base_commit"]["sha"]
-        except GitHubError as e:
-            log.warning("PR #%d: no merge-base (%s), blaming the base branch head", rec["n"], e)
 
     if len(ranges) > MAX_BLAME_FILES:
         keep = sorted(ranges, key=lambda p: -len(ranges[p]))[:MAX_BLAME_FILES]
