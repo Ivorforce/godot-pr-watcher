@@ -253,5 +253,25 @@ class QueueTest(unittest.TestCase):
             self.assertEqual(st.subs["1"]["queue"], {})
 
 
+class SubscriptionLimitTest(unittest.TestCase):
+    def test_limit_applies_to_strangers_only(self):
+        from watcher import notify
+
+        def issue(n, login, assoc):
+            return {"number": n, "user": {"login": login}, "author_association": assoc,
+                    "created_at": "2026-10-01T00:00:00Z", "body": "```yaml\nmatch: {paths: [core/]}\n```"}
+
+        class FakeGitHub:
+            def paginate(self, path, params=None):
+                return [issue(n, "owner", "OWNER") for n in range(1, 6)] + \
+                       [issue(n, "stranger", "NONE") for n in range(6, 11)]
+
+        with tempfile.TemporaryDirectory() as d:
+            active = notify.load_subscriptions(CFG, FakeGitHub(), State(Path(d)))
+        valid = lambda login: sum(a["rules"] is not None for a in active.values() if a["login"] == login)
+        self.assertEqual(valid("owner"), 5)
+        self.assertEqual(valid("stranger"), notify.MAX_SUBSCRIPTIONS)
+
+
 if __name__ == "__main__":
     unittest.main()

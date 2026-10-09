@@ -18,7 +18,7 @@ labels to also watch areas.
   notifications. Older digests get collapsed. Each digest links an Atom feed too.
 - Edit the issue to change rules, close it to stop.
 
-Rules are public. Max 3 open subscriptions per person. Bugs or questions: open a blank issue.
+Rules are public. Max 3 open subscriptions per person (no limit for collaborators on this repo). Bugs or questions: open a blank issue.
 
 ## Rules
 

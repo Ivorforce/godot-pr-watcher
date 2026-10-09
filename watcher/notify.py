@@ -14,6 +14,7 @@ from .state import State
 log = logging.getLogger(__name__)
 
 MAX_SUBSCRIPTIONS = 3       # open subscription issues per person; extras are ignored
+UNLIMITED = {"OWNER", "MEMBER", "COLLABORATOR"}  # people with access to this repo have no limit
 MAX_DIGEST_ITEMS = 50       # more are only counted in the comment (they're still in the feed)
 MATCH_SECONDS = 5           # per subscription and run; guards against slow patterns
 EVALUATE_AFTER = timedelta(days=7)
@@ -56,7 +57,7 @@ def load_subscriptions(cfg: Config, gh: GitHub, st: State) -> dict[str, dict]:
         login = issue["user"]["login"].lower()
         per_login[login].append(issue)
         rules, errors = parse_rules(issue.get("body"))
-        if len(per_login[login]) > MAX_SUBSCRIPTIONS:
+        if len(per_login[login]) > MAX_SUBSCRIPTIONS and issue.get("author_association") not in UNLIMITED:
             rules, errors = None, [too_many_error(len(per_login[login]))]
         key = str(issue["number"])
         sub = st.subs.setdefault(key, {"login": login, "created_at": issue["created_at"], "queue": {}})
@@ -172,7 +173,7 @@ def preview_issue(cfg: Config, gh: GitHub, st: State, number: int, dry_run: bool
     mine = sorted(i["number"] for i in gh.paginate(
         f"repos/{cfg.repo}/issues", {"labels": cfg.label, "state": "open", "creator": login})
         if "pull_request" not in i)
-    if number in mine[MAX_SUBSCRIPTIONS:]:
+    if number in mine[MAX_SUBSCRIPTIONS:] and issue.get("author_association") not in UNLIMITED:
         rules, errors = None, [too_many_error(len(mine))]
     items, per_trigger, notes = [], Counter(), []
     if rules:
