@@ -8,8 +8,10 @@ unofficial community tool, not run by the Godot project.
 
 ## Usage
 
-[Open a "Watch pull requests" issue](../../issues/new/choose) and submit it. You can accept the defaults,
-which watches when somebody changes code you wrote or reviewed. Or you can edit it to suit your needs.
+[Open a "Watch pull requests" issue](../../issues/new/choose) to subscribe.
+
+The default rules will let you know when somebody changes code you wrote or reviewed,
+which should be useful for most users. But you can also edit the rules to your needs.
 
 - First, a bot will reply to let you know your watcher is in effect.
 - Then you'll get updates about new PRs in digests, as new comments.
