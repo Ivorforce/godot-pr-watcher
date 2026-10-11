@@ -131,22 +131,11 @@ def send_digests(cfg: Config, gh: GitHub, st: State, active: dict[str, dict], dr
             print(f"--- digest for issue {key} ({a['login']}) ---\n{body}\n")
             continue
         try:
-            comment = gh.rest(f"repos/{cfg.repo}/issues/{key}/comments", method="POST", body={"body": body})
+            gh.rest(f"repos/{cfg.repo}/issues/{key}/comments", method="POST", body={"body": body})
         except GitHubError as e:
             log.warning("digest for issue %s (%d PRs) could not be posted: %s", key, len(items), e)
             continue
-        if sub.get("last_comment_node"):
-            minimize(gh, sub["last_comment_node"])
-        sub["last_comment_node"] = comment["node_id"]
         log.info("digest: issue %s, %d PRs", key, len(items))
-
-
-def minimize(gh: GitHub, node_id: str):
-    try:
-        gh.graphql('mutation($id: ID!) { minimizeComment(input: {subjectId: $id, classifier: OUTDATED}) '
-                   '{ minimizedComment { isMinimized } } }', {"id": node_id})
-    except GitHubError as e:
-        log.warning("could not minimize comment %s: %s", node_id, e)
 
 
 def preview_matches(cfg: Config, st: State, rules, login: str):

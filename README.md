@@ -85,7 +85,7 @@ Locally:
 python -m venv .venv && .venv/bin/pip install -r requirements.txt
 GITHUB_TOKEN=$(gh auth token) .venv/bin/python -m watcher run --data ./data          # index only
 .venv/bin/python -m watcher preview --data ./data --rules my-rules.yml --login <you>  # try rules
-.venv/bin/python -m unittest
+.venv/bin/python -m unittest discover tests
 ```
 
 ## Background
