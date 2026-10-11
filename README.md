@@ -91,5 +91,5 @@ GITHUB_TOKEN=$(gh auth token) .venv/bin/python -m watcher run --data ./data     
 ## Background
 
 Based on an analysis of ~1000 merged Godot PRs: blame and personal history predict who reviews a
-PR better than CODEOWNERS teams. Written with help from an AI assistant; the bot's comments are
-fixed templates, not generated text.
+PR better than CODEOWNERS teams. Written with help from an AI assistant. The tool itself does not
+involve any AI as it runs.
