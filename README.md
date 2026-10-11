@@ -28,6 +28,7 @@ match:                     # notify if any of these match
     - "**/*.glsl"          # quote patterns that start with *
   my_lines: [20%, 40]      # ≥20% or ≥40 of the changed lines are yours or from PRs you approved
   my_written_lines: 20%    # same, but only lines you wrote
+  most_lines: true         # you wrote or approved more of the changed lines than anyone else
   authors: [someone]
   labels: [topic:gdscript]
   milestones: ["3.7"]
@@ -35,12 +36,14 @@ match:                     # notify if any of these match
 ignore:                    # files, or PRs, to leave out; same keys except the line counts
   paths: ["**/tests/"]
   labels: [documentation]
-include: [drafts, own, other_branches]  # all off by default
+include: [drafts, own, other_branches, involved]  # all off by default
 digest: daily              # hourly, daily (default) or weekly
 ```
 
 `other_branches` means PRs to branches other than `master` (e.g. cherry-picks); you get those
-anyway when they match through `branches` or `milestones`.
+anyway when they match through `branches` or `milestones`. `involved` keeps PRs where you're
+already a requested reviewer, assignee, commenter or reviewer, or @-mentioned in the description;
+GitHub notifies you about those already, so digests leave them out by default.
 
 You hear about each PR once, and only about PRs that became ready for review after you subscribed.
 The preview tells you about patterns or labels that matched nothing.
@@ -51,7 +54,8 @@ which the daily default usually allows.
 
 `my_lines` blames the changed lines at the PR's merge-base and honours Godot's
 `.git-blame-ignore-revs`. It isn't affected by `ignore: paths`. PRs that only add code have
-nothing to blame. If you approve large PRs you only partly review, use `my_written_lines` instead.
+nothing to blame. If `my_lines` is too noisy, e.g. because you approve large PRs you only partly
+review, try `most_lines` (fewer, more relevant matches) or `my_written_lines`.
 
 ## How it works
 

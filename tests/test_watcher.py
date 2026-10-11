@@ -176,6 +176,15 @@ class MatchTest(unittest.TestCase):
         self.assertEqual(match(both, pr(direct={"me": 3}, transitive={"me": 8}), "me", EXCLUDE), [("my_lines", "your lines 3 + approved 8 of 10")])
         self.assertEqual(match(both, pr(direct={"me": 3}), "me", EXCLUDE), [("my_written_lines", "your lines 3 of 10")])
 
+    def test_most_lines(self):
+        r = m("most_lines: true")
+        self.assertEqual(texts(r, pr(direct={"me": 1, "other": 1})), ["most lines: your lines 1 of 10"])
+        self.assertEqual(texts(r, pr(direct={"me": 1}, transitive={"other": 2})), [])
+        self.assertTrue(texts(r, pr(direct={"me": 1, "someone": 5, "x[bot]": 9})))  # author and bots don't count
+        self.assertEqual(texts(r, pr(direct={"other": 1})), [])
+        self.assertEqual(parse_rules("```yaml\nmatch: {most_lines: yes please}\n```")[0], None)
+        self.assertEqual(parse_rules("```yaml\nmatch: {most_lines: false}\n```")[0], None)  # nothing to match
+
     def test_authors(self):
         r = m("authors: [someone]")
         self.assertEqual(texts(r, pr()), ["author someone"])
@@ -272,6 +281,45 @@ class QueueTest(unittest.TestCase):
             st.index = {7: {**base, "draft": False, "ready_at": "2026-10-01T00:00:00Z"}}  # ready before subscribing
             notify.queue_matches(CFG, st, active)
             self.assertEqual(st.subs["1"]["queue"], {})
+
+
+class InvolvedTest(unittest.TestCase):
+    def run_digest(self, include=None):
+        from watcher import notify
+
+        class FakeGitHub:
+            posted = []
+
+            def graphql(self, query, variables=None, attempts=4):
+                return {"repository": {
+                    "p7": {"body": "", "participants": {"nodes": [{"login": "Me"}]},
+                           "assignees": {"nodes": []}, "reviewRequests": {"nodes": []}},
+                    "p8": {"body": "cc @me", "participants": {"nodes": []},
+                           "assignees": {"nodes": []}, "reviewRequests": {"nodes": []}},
+                    "p9": {"body": "cc `@me` @meow", "participants": {"nodes": []}, "assignees": {"nodes": []},
+                           "reviewRequests": {"nodes": [{"requestedReviewer": {}}]}}}}
+
+            def rest(self, path, params=None, method="GET", body=None):
+                self.posted.append(body["body"])
+
+        gh = FakeGitHub()
+        with tempfile.TemporaryDirectory() as d:
+            st = State(Path(d))
+            st.subs = {"1": {"login": "me", "created_at": "2026-10-01T00:00:00Z", "queue": {"7": [], "8": [], "9": []}}}
+            st.index = {n: pr(n=n, files=["core/a.cpp"]) for n in (7, 8, 9)}
+            rules_ = m("paths: [core/]", **({"include": include} if include else {}))
+            notify.send_digests(CFG, gh, st, {"1": {"issue": 1, "login": "me", "rules": rules_, "errors": []}}, False)
+            return gh.posted, {r["pr"]: r.get("skipped") for r in st.notified}
+
+    def test_skips_involved(self):
+        posted, recorded = self.run_digest()
+        self.assertEqual(recorded, {7: "involved", 8: "involved", 9: None})
+        self.assertIn("?n=9", posted[0])
+        self.assertNotIn("?n=7", posted[0])
+
+    def test_include_involved(self):
+        posted, recorded = self.run_digest("[involved]")
+        self.assertEqual(recorded, {7: None, 8: None, 9: None})
 
 
 class SubscriptionLimitTest(unittest.TestCase):

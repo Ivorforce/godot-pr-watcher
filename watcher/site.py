@@ -40,7 +40,8 @@ def build_site(cfg: Config, st: State, root: Path):
     # Feeds exist only for current subscribers; logins are [a-z0-9-], so safe as file names.
     by_login = defaultdict(list)
     for r in st.notified:
-        by_login[r["login"]].append(r)
+        if not r.get("skipped"):
+            by_login[r["login"]].append(r)
     subscribers = {s["login"] for s in st.subs.values()}
     for old in (docs / "feeds").glob("*.xml"):
         if old.stem not in subscribers:

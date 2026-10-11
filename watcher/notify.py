@@ -1,5 +1,6 @@
 """Subscriptions (issues), digest delivery, previews, and engagement evaluation."""
 import logging
+import re
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta, timezone
 
@@ -93,10 +94,46 @@ def queue_matches(cfg: Config, st: State, active: dict[str, dict]):
             log.warning("issue %s: matching took over %ds, skipped this run", key, MATCH_SECONDS)
 
 
+MENTION = re.compile(r"(?<![\w`])@([a-z0-9](?:[a-z0-9-]*[a-z0-9])?)", re.I)
+
+
+def involvement(cfg: Config, gh: GitHub, numbers: list[int]) -> dict[int, set[str]]:
+    """PR -> people GitHub already notifies about it: requested reviewers, assignees, participants
+    (author, commenters, reviewers) and people @-mentioned in the description. PRs that couldn't be
+    looked up are missing, so nobody is skipped for them."""
+    owner, name = cfg.target.split("/")
+    out = {}
+    for i in range(0, len(numbers), 25):
+        chunk = numbers[i:i + 25]
+        fields = " ".join(
+            f"p{n}: pullRequest(number: {n}) {{ body participants(first: 100) {{ nodes {{ login }} }} "
+            f"assignees(first: 20) {{ nodes {{ login }} }} "
+            f"reviewRequests(first: 50) {{ nodes {{ requestedReviewer {{ ... on User {{ login }} }} }} }} }}"
+            for n in chunk)
+        try:
+            repo = gh.graphql(f'query {{ repository(owner: "{owner}", name: "{name}") {{ {fields} }} }}')
+        except GitHubError as e:
+            log.warning("could not look up who is involved in %d PRs: %s", len(chunk), e)
+            continue
+        for n in chunk:
+            pr = (repo.get("repository") or {}).get(f"p{n}")
+            if pr is None:
+                continue
+            people = {p["login"] for key in ("participants", "assignees")
+                      for p in (pr.get(key) or {}).get("nodes") or [] if p}
+            people |= {(r.get("requestedReviewer") or {}).get("login")
+                       for r in (pr.get("reviewRequests") or {}).get("nodes") or [] if r}
+            people |= set(MENTION.findall(pr.get("body") or ""))
+            out[n] = {p.lower() for p in people if p}
+    return out
+
+
 def send_digests(cfg: Config, gh: GitHub, st: State, active: dict[str, dict], dry_run: bool):
     """Post due digests. A digest is recorded as sent *before* posting, so a failure later in the
-    run (or a failed post) can never make it go out twice; at worst one digest is lost."""
+    run (or a failed post) can never make it go out twice; at worst one digest is lost.
+    PRs the subscriber is already involved in are recorded as skipped, unless `include: involved`."""
     now = now_utc()
+    due = {}
     for key, a in active.items():
         sub = st.subs[key]
         if not sub["queue"] or a["rules"] is None:
@@ -118,11 +155,26 @@ def send_digests(cfg: Config, gh: GitHub, st: State, active: dict[str, dict], dr
         except TimeoutError:
             log.warning("issue %s: re-checking the queue took over %ds, skipped this run", key, MATCH_SECONDS)
             continue
+        due[key] = items
+
+    check = sorted({rec["n"] for key, items in due.items() if not active[key]["rules"].involved
+                    for rec, _ in items})
+    involved = involvement(cfg, gh, check) if check else {}
+
+    for key, items in due.items():
+        a, sub = active[key], st.subs[key]
         sub["queue"] = {}
         sub["last_digest_at"] = now.isoformat()
+        skip = set() if a["rules"].involved else {
+            rec["n"] for rec, _ in items
+            if rec.get("author") != a["login"] and a["login"] in involved.get(rec["n"], ())}
         for rec, reasons in items:
             st.notified.append({"issue": int(key), "login": a["login"], "pr": rec["n"],
-                                "at": now.isoformat(), "reasons": reasons, "engaged": None})
+                                "at": now.isoformat(), "reasons": reasons, "engaged": None,
+                                **({"skipped": "involved"} if rec["n"] in skip else {})})
+        if skip:
+            log.info("issue %s: skipped %d PRs the subscriber is already involved in", key, len(skip))
+        items = [(rec, reasons) for rec, reasons in items if rec["n"] not in skip]
         if not items:
             continue
         body = render.digest(cfg, items[:MAX_DIGEST_ITEMS], len(items) - MAX_DIGEST_ITEMS,
@@ -196,7 +248,8 @@ def evaluate(cfg: Config, gh: GitHub, st: State):
     """Record whether notified people later took part in the PR (comment, review, ...)."""
     owner, name = cfg.target.split("/")
     cutoff = now_utc() - EVALUATE_AFTER
-    todo = [r for r in st.notified if r["engaged"] is None and parse_time(r["at"]) < cutoff][:EVALUATE_PER_RUN]
+    todo = [r for r in st.notified if r["engaged"] is None and not r.get("skipped")
+            and parse_time(r["at"]) < cutoff][:EVALUATE_PER_RUN]
     numbers = sorted({r["pr"] for r in todo})
     participants = {}
     for i in range(0, len(numbers), 25):

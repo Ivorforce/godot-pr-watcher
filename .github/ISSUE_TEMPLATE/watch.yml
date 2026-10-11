@@ -18,9 +18,11 @@ body:
         - `paths`: from the repo root, e.g. `modules/gdscript/`. Use `**/` for anywhere, and quote patterns starting with `*`: `"**/*.glsl"`.
         - `my_lines`: `20%` (share of the lines a PR changes that you wrote or approved), `40` (line count), or both: `[20%, 40]`.
           `my_written_lines` is the same, but without lines from PRs you approved.
+        - `most_lines: true`: PRs where you wrote or approved more of the changed lines than anyone else.
         - `authors`, `labels`, `milestones`, `branches`: lists of names.
         - `ignore:` takes the same keys, except the line counts.
-        - `include:` any of `drafts`, `own` (your PRs), `other_branches` (non-master); all off by default.
+        - `include:` any of `drafts`, `own` (your PRs), `other_branches` (non-master),
+          `involved` (PRs you're already requested on, assigned to, took part in or were mentioned in); all off by default.
         - `digest`: `hourly`, `daily` (default) or `weekly`.
       render: yaml
       value: |

@@ -44,20 +44,27 @@ def match(rules: Rules, rec: dict, login: str, exclude: pathspec.PathSpec) -> li
                 more = f" +{len(hits) - 1} more" if len(hits) > 1 else ""
                 reasons.append(("paths", f"{code_span(pattern, 40)} → {code_span(hits[0])}{more}"))
                 break
-    if (rules.my_lines or rules.my_written_lines) and rec.get("old_lines"):
+    if (rules.my_lines or rules.my_written_lines or rules.most_lines) and rec.get("old_lines"):
         total = rec["old_lines"]
-        mine = rec.get("direct", {}).get(login, 0)
-        approved = rec.get("transitive", {}).get(login, 0)
+        direct, transitive = rec.get("direct", {}), rec.get("transitive", {})
+        mine, approved = direct.get(login, 0), transitive.get(login, 0)
+        parts = [f"your lines {mine}"] * bool(mine) + [f"approved {approved}"] * bool(approved)
 
         def reaches(count, share, at_least):
             return count and ((share is not None and count / total >= share)
                               or (at_least is not None and count >= at_least))
 
+        def most(person):
+            return min(direct.get(person, 0) + transitive.get(person, 0), total)
+
         if reaches(min(mine + approved, total), rules.my_lines_share, rules.my_lines_count):
-            parts = [f"your lines {mine}"] * bool(mine) + [f"approved {approved}"] * bool(approved)
             reasons.append(("my_lines", f"{' + '.join(parts)} of {total}"))
         elif reaches(mine, rules.my_written_lines_share, rules.my_written_lines_count):
             reasons.append(("my_written_lines", f"your lines {mine} of {total}"))
+        elif rules.most_lines and (count := most(login)) and all(
+                most(p) <= count for p in {*direct, *transitive}
+                if p not in (login, author) and not p.endswith("[bot]")):
+            reasons.append(("most_lines", f"most lines: {' + '.join(parts)} of {total}"))
     if author in rules.authors:
         reasons.append(("authors", f"author {author}"))
     if hit := next((label for label in rules.labels if label in labels), None):

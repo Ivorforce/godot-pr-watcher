@@ -2,10 +2,10 @@
 
 The rules are the first ```yaml (or plain ```) fenced block in the body:
 
-    match:    {paths, my_lines, my_written_lines, authors, labels,       any one triggers
-               milestones, branches}
+    match:    {paths, my_lines, my_written_lines, most_lines, authors,   any one triggers
+               labels, milestones, branches}
     ignore:   {paths, authors, labels, milestones, branches}             files / PRs to leave out
-    include:  [drafts, own, other_branches]                              all off by default
+    include:  [drafts, own, other_branches, involved]                    all off by default
     digest:   hourly | daily | weekly
 
 The issue body is untrusted input: it is only ever parsed with `yaml.safe_load` and type-checked here.
@@ -36,8 +36,8 @@ LIST_KEYS = {
     "branches": "a list of branch names",
 }
 LINE_KEYS = ("my_lines", "my_written_lines")  # written or approved / written only
-MATCH_KEYS = (*LIST_KEYS, *LINE_KEYS)
-INCLUDE = ("drafts", "own", "other_branches")
+MATCH_KEYS = (*LIST_KEYS, *LINE_KEYS, "most_lines")
+INCLUDE = ("drafts", "own", "other_branches", "involved")
 MY_LINES = "a percentage like `20%`, a line count like `40`, or both: `[20%, 40]`"
 
 
@@ -55,6 +55,7 @@ class Rules:
     my_lines_count: int | None = None     # `40`
     my_written_lines_share: float | None = None
     my_written_lines_count: int | None = None
+    most_lines: bool = False              # more lines (written or approved) than anyone but the author
     authors: list[str] = field(default_factory=list)
     labels: list[str] = field(default_factory=list)
     milestones: list[str] = field(default_factory=list)
@@ -69,6 +70,7 @@ class Rules:
     drafts: bool = False
     own: bool = False
     other_branches: bool = False
+    involved: bool = False                # PRs you're already requested on, assigned to or took part in
     digest: str | None = None
 
     def __post_init__(self):
@@ -142,6 +144,11 @@ def parse_section(name: str, value, allowed: tuple[str, ...], errors: list[str])
                           f"Known keys: {', '.join(f'`{k}`' for k in allowed)}.")
         elif v is None:
             continue
+        elif key == "most_lines":
+            if isinstance(v, bool):
+                out["most_lines"] = v
+            else:
+                errors.append("`match: most_lines:` must be `true` or `false`.")
         elif key in LINE_KEYS:
             # One value, or a list with a share and a count (either one triggers).
             parsed = [parse_my_lines(x) for x in (v if isinstance(v, list) else [v])]
@@ -200,7 +207,7 @@ def parse_rules(body: str | None) -> tuple[Rules | None, list[str]]:
                 kw["digest"] = value
             else:
                 errors.append(f"`digest:` must be one of {', '.join(DIGEST_PERIODS)}.")
-    has_trigger = any(kw.get(k) for k in LIST_KEYS) or any(
+    has_trigger = any(kw.get(k) for k in (*LIST_KEYS, "most_lines")) or any(
         kw.get(f"{k}_{part}") is not None for k in LINE_KEYS for part in ("share", "count"))
     if not errors and not has_trigger:
         errors.append("Nothing to match: add at least one key under `match:`, e.g. `paths: [core/]`.")
