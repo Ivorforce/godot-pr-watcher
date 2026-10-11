@@ -69,6 +69,8 @@ class RulesTest(unittest.TestCase):
         self.assertEqual(m("authors: ['@Bob']").authors, ["bob"])
         both = m("my_lines: [20%, 40]")
         self.assertEqual((both.my_lines_share, both.my_lines_count), (0.2, 40))
+        written = m("my_written_lines: [10%, 30]")
+        self.assertEqual((written.my_written_lines_share, written.my_written_lines_count, written.my_lines), (0.1, 30, False))
 
     def test_errors(self):
         for text in ["match: {paths: [a]}\nnope: 1", "match: {my_lines: 0}", "match: {my_lines: 150%}",
@@ -76,7 +78,7 @@ class RulesTest(unittest.TestCase):
                      "match: {my_lines: []}", "match: {paths: 3}", "match: {paths: [a]}\ndigest: monthly",
                      "include: [drafts]", "match: {paths: [a]}\ninclude: [everything]", "- a\n- b",
                      "match: {paths: [unclosed", "match: {paths: ['!core/']}", "match: {paths: [a], nope: 1}",
-                     "match: {my_lines: 20%}\nignore: {my_lines: 40}", "match: [a]", "paths: [a]"]:
+                     "match: {my_lines: 20%}\nignore: {my_lines: 40}", "match: {my_written_lines: 0}", "match: [a]", "paths: [a]"]:
             r, errors = parse_rules(f"```yaml\n{text}\n```")
             self.assertIsNone(r, text)
             self.assertTrue(errors, text)
@@ -152,18 +154,27 @@ class MatchTest(unittest.TestCase):
     def test_my_lines(self):
         r = m("my_lines: 30%")
         self.assertEqual(texts(r, pr(direct={"me": 2})), [])
-        self.assertEqual(texts(r, pr(direct={"me": 4})), ["your lines 4/10"])
-        self.assertEqual(texts(r, pr(direct={"me": 2}, transitive={"me": 2})), ["lines you wrote or approved 4/10"])
+        self.assertEqual(texts(r, pr(direct={"me": 4})), ["your lines 4 of 10"])
+        self.assertEqual(texts(r, pr(direct={"me": 2}, transitive={"me": 2})), ["your lines 2 + approved 2 of 10"])
+        self.assertEqual(texts(r, pr(transitive={"me": 3})), ["approved 3 of 10"])
         self.assertEqual(texts(r, pr(direct={"me": 9}, old_lines=0)), [])
 
     def test_my_lines_count(self):
         r = m("my_lines: 40")
         self.assertEqual(texts(r, pr(direct={"me": 39}, old_lines=2000)), [])
-        self.assertEqual(texts(r, pr(direct={"me": 40}, old_lines=2000)), ["your lines 40/2000"])
+        self.assertEqual(texts(r, pr(direct={"me": 40}, old_lines=2000)), ["your lines 40 of 2000"])
         both = m("my_lines: [20%, 40]")
         self.assertTrue(texts(both, pr(direct={"me": 2}, old_lines=10)))      # share
         self.assertTrue(texts(both, pr(direct={"me": 40}, old_lines=2000)))   # count
         self.assertEqual(texts(both, pr(direct={"me": 39}, old_lines=2000)), [])
+
+    def test_my_written_lines(self):
+        r = m("my_written_lines: [30%, 40]")
+        self.assertEqual(texts(r, pr(direct={"me": 2}, transitive={"me": 8})), [])
+        self.assertEqual(texts(r, pr(direct={"me": 3}, transitive={"me": 8})), ["your lines 3 of 10"])
+        both = m("my_lines: 50%, my_written_lines: 30%")
+        self.assertEqual(match(both, pr(direct={"me": 3}, transitive={"me": 8}), "me", EXCLUDE), [("my_lines", "your lines 3 + approved 8 of 10")])
+        self.assertEqual(match(both, pr(direct={"me": 3}), "me", EXCLUDE), [("my_written_lines", "your lines 3 of 10")])
 
     def test_authors(self):
         r = m("authors: [someone]")

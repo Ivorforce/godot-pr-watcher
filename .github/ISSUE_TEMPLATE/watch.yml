@@ -17,8 +17,9 @@ body:
         YAML. A PR matches if anything under `match:` matches and nothing under `ignore:` does.
         - `paths`: from the repo root, e.g. `modules/gdscript/`. Use `**/` for anywhere, and quote patterns starting with `*`: `"**/*.glsl"`.
         - `my_lines`: `20%` (share of the lines a PR changes that you wrote or approved), `40` (line count), or both: `[20%, 40]`.
+          `my_written_lines` is the same, but without lines from PRs you approved.
         - `authors`, `labels`, `milestones`, `branches`: lists of names.
-        - `ignore:` takes the same keys, except `my_lines`.
+        - `ignore:` takes the same keys, except the line counts.
         - `include:` any of `drafts`, `own` (your PRs), `other_branches` (non-master); all off by default.
         - `digest`: `hourly`, `daily` (default) or `weekly`.
       render: yaml

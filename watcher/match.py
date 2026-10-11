@@ -44,15 +44,20 @@ def match(rules: Rules, rec: dict, login: str, exclude: pathspec.PathSpec) -> li
                 more = f" +{len(hits) - 1} more" if len(hits) > 1 else ""
                 reasons.append(("paths", f"{code_span(pattern, 40)} → {code_span(hits[0])}{more}"))
                 break
-    if rules.my_lines and rec.get("old_lines"):
+    if (rules.my_lines or rules.my_written_lines) and rec.get("old_lines"):
         total = rec["old_lines"]
         mine = rec.get("direct", {}).get(login, 0)
         approved = rec.get("transitive", {}).get(login, 0)
-        count = min(mine + approved, total)
-        if count and ((rules.my_lines_share is not None and count / total >= rules.my_lines_share)
-                      or (rules.my_lines_count is not None and count >= rules.my_lines_count)):
-            what = "lines you wrote or approved" if approved else "your lines"
-            reasons.append(("my_lines", f"{what} {count}/{total}"))
+
+        def reaches(count, share, at_least):
+            return count and ((share is not None and count / total >= share)
+                              or (at_least is not None and count >= at_least))
+
+        if reaches(min(mine + approved, total), rules.my_lines_share, rules.my_lines_count):
+            parts = [f"your lines {mine}"] * bool(mine) + [f"approved {approved}"] * bool(approved)
+            reasons.append(("my_lines", f"{' + '.join(parts)} of {total}"))
+        elif reaches(mine, rules.my_written_lines_share, rules.my_written_lines_count):
+            reasons.append(("my_written_lines", f"your lines {mine} of {total}"))
     if author in rules.authors:
         reasons.append(("authors", f"author {author}"))
     if hit := next((label for label in rules.labels if label in labels), None):

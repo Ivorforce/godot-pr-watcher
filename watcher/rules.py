@@ -2,7 +2,8 @@
 
 The rules are the first ```yaml (or plain ```) fenced block in the body:
 
-    match:    {paths, my_lines, authors, labels, milestones, branches}   any one triggers
+    match:    {paths, my_lines, my_written_lines, authors, labels,       any one triggers
+               milestones, branches}
     ignore:   {paths, authors, labels, milestones, branches}             files / PRs to leave out
     include:  [drafts, own, other_branches]                              all off by default
     digest:   hourly | daily | weekly
@@ -34,7 +35,8 @@ LIST_KEYS = {
     "milestones": "a list of milestone names",
     "branches": "a list of branch names",
 }
-MATCH_KEYS = (*LIST_KEYS, "my_lines")
+LINE_KEYS = ("my_lines", "my_written_lines")  # written or approved / written only
+MATCH_KEYS = (*LIST_KEYS, *LINE_KEYS)
 INCLUDE = ("drafts", "own", "other_branches")
 MY_LINES = "a percentage like `20%`, a line count like `40`, or both: `[20%, 40]`"
 
@@ -51,6 +53,8 @@ class Rules:
     paths: list[str] = field(default_factory=list)
     my_lines_share: float | None = None   # `20%`
     my_lines_count: int | None = None     # `40`
+    my_written_lines_share: float | None = None
+    my_written_lines_count: int | None = None
     authors: list[str] = field(default_factory=list)
     labels: list[str] = field(default_factory=list)
     milestones: list[str] = field(default_factory=list)
@@ -75,6 +79,10 @@ class Rules:
     @property
     def my_lines(self) -> bool:
         return self.my_lines_share is not None or self.my_lines_count is not None
+
+    @property
+    def my_written_lines(self) -> bool:
+        return self.my_written_lines_share is not None or self.my_written_lines_count is not None
 
 
 def check_pattern(p: str) -> str | None:
@@ -134,17 +142,17 @@ def parse_section(name: str, value, allowed: tuple[str, ...], errors: list[str])
                           f"Known keys: {', '.join(f'`{k}`' for k in allowed)}.")
         elif v is None:
             continue
-        elif key == "my_lines":
+        elif key in LINE_KEYS:
             # One value, or a list with a share and a count (either one triggers).
             parsed = [parse_my_lines(x) for x in (v if isinstance(v, list) else [v])]
             ok = bool(parsed) and None not in parsed
             shares = [share for share, _ in parsed if share is not None] if ok else []
             counts = [count for _, count in parsed if count is not None] if ok else []
             if ok and len(shares) <= 1 and len(counts) <= 1:
-                out["my_lines_share"] = shares[0] if shares else None
-                out["my_lines_count"] = counts[0] if counts else None
+                out[f"{key}_share"] = shares[0] if shares else None
+                out[f"{key}_count"] = counts[0] if counts else None
             else:
-                errors.append(f"`match: my_lines:` must be {MY_LINES}.")
+                errors.append(f"`match: {key}:` must be {MY_LINES}.")
         elif (parsed := parse_list(name, key, v, errors)) is not None:
             out[key] = parsed
     return out
@@ -192,8 +200,8 @@ def parse_rules(body: str | None) -> tuple[Rules | None, list[str]]:
                 kw["digest"] = value
             else:
                 errors.append(f"`digest:` must be one of {', '.join(DIGEST_PERIODS)}.")
-    has_trigger = any(kw.get(k) for k in LIST_KEYS) or kw.get("my_lines_share") is not None \
-        or kw.get("my_lines_count") is not None
+    has_trigger = any(kw.get(k) for k in LIST_KEYS) or any(
+        kw.get(f"{k}_{part}") is not None for k in LINE_KEYS for part in ("share", "count"))
     if not errors and not has_trigger:
         errors.append("Nothing to match: add at least one key under `match:`, e.g. `paths: [core/]`.")
     if errors:

@@ -27,11 +27,12 @@ match:                     # notify if any of these match
     - modules/gdscript/
     - "**/*.glsl"          # quote patterns that start with *
   my_lines: [20%, 40]      # ≥20% or ≥40 of the changed lines are yours or from PRs you approved
+  my_written_lines: 20%    # same, but only lines you wrote
   authors: [someone]
   labels: [topic:gdscript]
   milestones: ["3.7"]
   branches: [3.x]
-ignore:                    # files, or PRs, to leave out; same keys except my_lines
+ignore:                    # files, or PRs, to leave out; same keys except the line counts
   paths: ["**/tests/"]
   labels: [documentation]
 include: [drafts, own, other_branches]  # all off by default
@@ -50,7 +51,7 @@ which the daily default usually allows.
 
 `my_lines` blames the changed lines at the PR's merge-base and honours Godot's
 `.git-blame-ignore-revs`. It isn't affected by `ignore: paths`. PRs that only add code have
-nothing to blame.
+nothing to blame. If you approve large PRs you only partly review, use `my_written_lines` instead.
 
 ## How it works
 
