@@ -201,8 +201,18 @@ def keep_alive(cfg: Config, gh: GitHub, active: dict[str, dict]):
         log.warning("could not reset the schedule's inactivity timer: %s", e)
 
 
+_repo_files: dict[str, list[str] | None] = {}
+
+
 def repo_files(cfg: Config, gh: GitHub) -> list[str] | None:
-    """All file paths on the target's default branch, or None if they can't be listed in one call."""
+    """All file paths on the target's default branch, or None if they can't be listed in one call.
+    Fetched once per process."""
+    if cfg.target not in _repo_files:
+        _repo_files[cfg.target] = _list_repo_files(cfg, gh)
+    return _repo_files[cfg.target]
+
+
+def _list_repo_files(cfg: Config, gh: GitHub) -> list[str] | None:
     try:
         branch = gh.rest(f"repos/{cfg.target}")["default_branch"]
         tree = gh.rest(f"repos/{cfg.target}/git/trees/{branch}", {"recursive": "1"})
@@ -255,6 +265,22 @@ def preview_issue(cfg: Config, gh: GitHub, st: State, number: int, dry_run: bool
             gh.rest(f"repos/{cfg.repo}/issues/comments/{c['id']}", method="PATCH", body={"body": body})
             return
     gh.rest(f"repos/{cfg.repo}/issues/{number}/comments", method="POST", body={"body": body})
+
+
+def preview_all(cfg: Config, gh: GitHub, st: State, dry_run: bool):
+    """Refresh the preview on every open subscription, e.g. after the watcher itself changed."""
+    issues = [i["number"] for i in gh.paginate(f"repos/{cfg.repo}/issues", {"labels": cfg.label, "state": "open"})
+              if "pull_request" not in i]
+    failed = 0
+    for number in sorted(issues):
+        try:
+            preview_issue(cfg, gh, st, number, dry_run)
+        except GitHubError as e:
+            log.warning("preview for issue %d failed: %s", number, e)
+            failed += 1
+    log.info("refreshed %d previews (%d failed)", len(issues) - failed, failed)
+    if failed:
+        raise GitHubError(0, f"{failed} previews failed")
 
 
 def evaluate(cfg: Config, gh: GitHub, st: State):

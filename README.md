@@ -61,7 +61,8 @@ review, try `most_lines` (fewer, more relevant matches) or `my_written_lines`.
 
 `.github/workflows/watch.yml` runs hourly. It indexes PRs from the last 30 days (changed files, plus
 blame through GitHub's GraphQL API, no clone), matches them against open `watch` issues and posts
-due digests. `preview.yml` answers new and edited issues. State lives on the `data` branch, which
+due digests. `preview.yml` answers new and edited issues; run it by hand to refresh one preview, or all of them
+after changing the watcher. State lives on the `data` branch, which
 also serves the Pages site: the feeds, and a redirect page so Godot PRs don't get "mentioned this"
 backlinks. A week after notifying you, it checks whether you took part in the PR, to see whether
 this is useful.

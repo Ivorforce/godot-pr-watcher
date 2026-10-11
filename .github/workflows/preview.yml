@@ -3,20 +3,26 @@ name: preview
 on:
   issues:
     types: [opened, edited, reopened, labeled]
+  # Re-run by hand (Actions tab), e.g. after changing the watcher: one issue, or all if left empty.
+  workflow_dispatch:
+    inputs:
+      issue:
+        description: "Issue number (empty: all open subscriptions)"
+        required: false
 
 permissions:
   contents: read
   issues: write
 
 concurrency:
-  group: preview-${{ github.event.issue.number }}
+  group: preview-${{ github.event.issue.number || inputs.issue || 'all' }}
   cancel-in-progress: true
 
 jobs:
   preview:
     # Only subscription issues; keep the label in sync with `label` in config.yml.
     # The issue body is untrusted: it's never interpolated here, only read by the script via the API.
-    if: contains(github.event.issue.labels.*.name, 'watch')
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.issue.labels.*.name, 'watch')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -34,5 +40,10 @@ jobs:
       - name: Preview
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          ISSUE: ${{ github.event.issue.number }}
-        run: python -m watcher preview --issue "$ISSUE"
+          ISSUE: ${{ github.event.issue.number || inputs.issue }}
+        run: |
+          if [ -n "$ISSUE" ]; then
+            python -m watcher preview --issue "$ISSUE"
+          else
+            python -m watcher preview --all
+          fi

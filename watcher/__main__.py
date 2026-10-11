@@ -2,6 +2,7 @@
 
     python -m watcher run [--budget S] [--dry-run]          index, queue matches, send due digests
     python -m watcher preview --issue N [--dry-run]         reply to a subscription issue
+    python -m watcher preview --all [--dry-run]             refresh every subscription's preview
     python -m watcher preview --rules FILE --login LOGIN    try rules locally against the index
 
 State is read from and written to `--data` (a checkout of the `data` branch).
@@ -31,6 +32,7 @@ def main():
     ap.add_argument("--budget", type=float, default=40, help="seconds to spend analysing PRs")
     ap.add_argument("--dry-run", action="store_true", help="print comments instead of posting them")
     ap.add_argument("--issue", type=int)
+    ap.add_argument("--all", action="store_true", help="preview: every open subscription")
     ap.add_argument("--rules", type=Path, help="preview: rules file instead of an issue")
     ap.add_argument("--login", help="preview: subscriber login for --rules")
     args = ap.parse_args()
@@ -71,6 +73,8 @@ def main():
         logging.info("run: %.1fs", time.monotonic() - start)
         if failed:
             sys.exit(1)
+    elif args.all:
+        notify.preview_all(cfg, gh, st, args.dry_run)
     elif args.issue is not None:
         notify.preview_issue(cfg, gh, st, args.issue, args.dry_run)
     elif args.rules and args.login:
@@ -84,7 +88,7 @@ def main():
             print(f"#{rec['n']} {rec['title']} — {' · '.join(reasons)}")
         print(f"\n{len(items)} matches ({dict(per_trigger)})", *notes, sep="\n")
     else:
-        ap.error("preview needs --issue, or --rules and --login")
+        ap.error("preview needs --issue, --all, or --rules and --login")
 
 
 if __name__ == "__main__":
