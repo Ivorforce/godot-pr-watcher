@@ -11,6 +11,7 @@ on:
         default: "40"
 
 permissions:
+  actions: write    # keep the schedule enabled while there are subscribers (notify.keep_alive)
   contents: write
   issues: write
 

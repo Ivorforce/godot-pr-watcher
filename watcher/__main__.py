@@ -61,6 +61,8 @@ def main():
             if active is not None:
                 stage(notify.queue_matches, cfg, st, active)
                 stage(notify.send_digests, cfg, gh, st, active, args.dry_run)
+                if not args.dry_run:
+                    stage(notify.keep_alive, cfg, gh, active)
             stage(notify.evaluate, cfg, gh, st)
         else:
             logging.warning("GITHUB_REPOSITORY not set: only indexing, no subscriptions")

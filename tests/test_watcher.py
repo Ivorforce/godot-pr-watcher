@@ -283,5 +283,24 @@ class SubscriptionLimitTest(unittest.TestCase):
         self.assertEqual(valid("stranger"), notify.MAX_SUBSCRIPTIONS)
 
 
+class KeepAliveTest(unittest.TestCase):
+    def test_only_while_subscribed(self):
+        from watcher import notify
+
+        class FakeGitHub:
+            calls = []
+
+            def rest(self, path, params=None, method="GET", body=None):
+                self.calls.append((method, path))
+
+        gh = FakeGitHub()
+        notify.keep_alive(CFG, gh, {})
+        self.assertEqual(gh.calls, [])
+        notify.keep_alive(CFG, gh, {"1": {}})
+        self.assertEqual(len(gh.calls), 1)
+        self.assertEqual(gh.calls[0][0], "PUT")
+        self.assertTrue(gh.calls[0][1].endswith("/actions/workflows/watch.yml/enable"))
+
+
 if __name__ == "__main__":
     unittest.main()

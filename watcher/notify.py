@@ -138,6 +138,17 @@ def send_digests(cfg: Config, gh: GitHub, st: State, active: dict[str, dict], dr
         log.info("digest: issue %s, %d PRs", key, len(items))
 
 
+def keep_alive(cfg: Config, gh: GitHub, active: dict[str, dict]):
+    """GitHub disables scheduled workflows after 60 days without repository activity. Re-enabling
+    resets that timer; only done while someone is subscribed, so an unused watcher still stops."""
+    if not active:
+        return
+    try:
+        gh.rest(f"repos/{cfg.repo}/actions/workflows/watch.yml/enable", method="PUT")
+    except GitHubError as e:
+        log.warning("could not reset the schedule's inactivity timer: %s", e)
+
+
 def preview_matches(cfg: Config, st: State, rules, login: str):
     """(matches as (rec, reason texts), matches per trigger, tuning notes).
     Raises TimeoutError if the rules are too slow to evaluate."""

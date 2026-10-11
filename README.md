@@ -76,8 +76,8 @@ Code is in `watcher/`. `match.py` (rules) and `index.py` (blame) are the interes
    and indexes the last 30 days (about 5 minutes for Godot).
 4. Settings → Pages: deploy from the `data` branch, `/docs` folder.
 
-GitHub disables scheduled workflows after 60 days without repo activity. If that happens,
-re-enable `watch` in the Actions tab.
+GitHub disables scheduled workflows after 60 days without repo activity. While anyone is
+subscribed, each run resets that timer; otherwise re-enable `watch` in the Actions tab.
 
 Locally:
 
