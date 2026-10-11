@@ -80,13 +80,13 @@ def match(rules: Rules, rec: dict, login: str, exclude: pathspec.PathSpec) -> li
     return reasons
 
 
-def diagnose(rules: Rules, recs: list[dict], login: str) -> list[str]:
-    """Hints for tuning rules, from the indexed PRs (ignoring filters)."""
+def diagnose(rules: Rules, recs: list[dict], login: str, repo_files: list[str] | None = None) -> list[str]:
+    """Hints for tuning rules, from the indexed PRs (ignoring filters) and the repository's files.
+    Paths are only checked against `repo_files`: a path no recent PR touched is still fine."""
     notes = []
-    files = {f for r in recs for f in r.get("files", [])}
-    for pattern, spec in rules.path_specs:
-        if not any(spec.match_file(f) for f in files):
-            notes.append(f"{code_span(pattern, 40)} matched no changed file. Paths start at the "
+    for pattern, spec in rules.path_specs if repo_files is not None else ():
+        if not any(spec.match_file(f) for f in repo_files):
+            notes.append(f"{code_span(pattern, 40)} matches no file in the repository. Paths start at the "
                          "repository root; use `**/` to match anywhere.")
     seen_labels = {label for r in recs for label in r.get("labels", [])}
     for label in sorted(set(rules.labels) | set(rules.ignore_labels)):

@@ -78,7 +78,8 @@ def main():
         rules, errors = parse_rules(text if "```" in text else f"```yaml\n{text}\n```")
         if errors:
             sys.exit("\n".join(errors))
-        items, per_trigger, notes = notify.preview_matches(cfg, st, rules, args.login.lower())
+        files = notify.repo_files(cfg, gh) if rules.paths else None
+        items, per_trigger, notes = notify.preview_matches(cfg, st, rules, args.login.lower(), files)
         for rec, reasons in items:
             print(f"#{rec['n']} {rec['title']} — {' · '.join(reasons)}")
         print(f"\n{len(items)} matches ({dict(per_trigger)})", *notes, sep="\n")

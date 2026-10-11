@@ -201,14 +201,26 @@ def keep_alive(cfg: Config, gh: GitHub, active: dict[str, dict]):
         log.warning("could not reset the schedule's inactivity timer: %s", e)
 
 
-def preview_matches(cfg: Config, st: State, rules, login: str):
-    """(matches as (rec, reason texts), matches per trigger, tuning notes).
+def repo_files(cfg: Config, gh: GitHub) -> list[str] | None:
+    """All file paths on the target's default branch, or None if they can't be listed in one call."""
+    try:
+        branch = gh.rest(f"repos/{cfg.target}")["default_branch"]
+        tree = gh.rest(f"repos/{cfg.target}/git/trees/{branch}", {"recursive": "1"})
+    except GitHubError as e:
+        log.warning("could not list the repository's files: %s", e)
+        return None
+    return None if tree.get("truncated") else [t["path"] for t in tree["tree"] if t["type"] == "blob"]
+
+
+def preview_matches(cfg: Config, st: State, rules, login: str, files: list[str] | None = None):
+    """(matches as (rec, reason texts), matches per trigger, tuning notes). `files` (the repository's
+    paths) enables the check for path patterns that match nothing.
     Raises TimeoutError if the rules are too slow to evaluate."""
     exclude = cfg.exclude_spec
     recs = [rec for rec in st.index.values() if rec.get("analyzed_sha") == rec.get("head_sha")]
     with time_limit(MATCH_SECONDS * 2):
         matched = [(rec, why) for rec in recs if (why := match(rules, rec, login, exclude))]
-        notes = diagnose(rules, recs, login)
+        notes = diagnose(rules, recs, login, files)
     per_trigger = Counter(kind for _, why in matched for kind in {k for k, _ in why})
     items = sorted(((rec, [text for _, text in why]) for rec, why in matched), key=lambda x: -x[0]["n"])
     return items, per_trigger, notes
@@ -230,7 +242,8 @@ def preview_issue(cfg: Config, gh: GitHub, st: State, number: int, dry_run: bool
     items, per_trigger, notes = [], Counter(), []
     if rules:
         try:
-            items, per_trigger, notes = preview_matches(cfg, st, rules, login)
+            files = repo_files(cfg, gh) if rules.paths else None
+            items, per_trigger, notes = preview_matches(cfg, st, rules, login, files)
         except TimeoutError:
             rules, errors = None, ["Your path patterns take too long to evaluate. Simplify them."]
     body = render.preview(cfg, errors, items, per_trigger, notes, cfg.index_window_days / 7)

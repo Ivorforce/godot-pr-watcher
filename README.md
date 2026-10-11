@@ -46,7 +46,7 @@ already a requested reviewer, assignee, commenter or reviewer, or @-mentioned in
 GitHub notifies you about those already, so digests leave them out by default.
 
 You hear about each PR once, and only about PRs that became ready for review after you subscribed.
-The preview tells you about patterns or labels that matched nothing.
+The preview points out path patterns that match no file in the repository, and labels no recent PR had.
 
 Labels and milestones are often added hours after a PR opens. One that triggers a match works
 whenever it arrives. One under `ignore:` only helps if it's there before your digest goes out,

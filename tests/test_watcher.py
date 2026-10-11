@@ -205,10 +205,12 @@ class MatchTest(unittest.TestCase):
         self.assertEqual(texts(m("milestones: ['4.6']"), pr(milestone="4.5")), [])
 
     def test_diagnose(self):
-        r = m("paths: [editor/, core/], labels: [bgu], authors: [ghost]")
-        notes = diagnose(r, [pr(files=["core/a.cpp"], labels=["bug"])], "me")
+        r = m("paths: [editor/, core/, servers/], labels: [bgu], authors: [ghost]")
+        recs = [pr(files=["core/a.cpp"], labels=["bug"])]
+        notes = diagnose(r, recs, "me", ["core/a.cpp", "editor/b.cpp"])  # editor/ exists, just no PR
         self.assertEqual(len(notes), 3)
-        self.assertIn("editor/", notes[0])
+        self.assertIn("servers/", notes[0])
+        self.assertEqual(len(diagnose(r, recs, "me")), 2)  # repository files unknown: no path notes
 
 
 class RenderTest(unittest.TestCase):
