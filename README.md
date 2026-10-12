@@ -55,7 +55,17 @@ which the daily default usually allows.
 `my_lines` blames the changed lines at the PR's merge-base and honours Godot's
 `.git-blame-ignore-revs`. It isn't affected by `ignore: paths`. PRs that only add code have
 nothing to blame. If `my_lines` is too noisy, e.g. because you approve large PRs you only partly
-review, try `most_lines` (fewer, more relevant matches) or `my_written_lines`.
+review, try `most_lines` (fewer, more relevant matches) or `my_written_lines`. Roughly:
+
+| Rule | Notifications you end up reviewing | PRs you review that you hear about |
+|---|---|---|
+| `my_lines: [20%, 40]` (default) | ~1 in 4 | ~45% |
+| `my_lines: 1` | ~1 in 6 | ~53% |
+| `most_lines: true` | ~1 in 3 | ~33% |
+| `my_written_lines: [20%, 40]` | ~1 in 3 | ~18% |
+
+Measured on ~1000 past Godot PRs that changed existing code. Interest is more than reviewing, so
+compare rows rather than reading the numbers literally.
 
 ## How it works
 
