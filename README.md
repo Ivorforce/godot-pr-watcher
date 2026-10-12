@@ -26,6 +26,7 @@ match:                     # notify if any of these match
   paths:                   # from the repo root; "**/" matches anywhere
     - modules/gdscript/
     - "**/*.glsl"          # quote patterns that start with *
+  teams: [core]            # files a team owns in Godot's CODEOWNERS
   my_lines: [20%, 40]      # ≥20% or ≥40 of the changed lines are yours or from PRs you approved
   my_written_lines: 20%    # same, but only lines you wrote
   most_lines: true         # you wrote or approved more of the changed lines than anyone else
@@ -52,6 +53,11 @@ Labels and milestones are often added hours after a PR opens. One that triggers 
 whenever it arrives. One under `ignore:` only helps if it's there before your digest goes out,
 which the daily default usually allows.
 
+`teams` uses Godot's [CODEOWNERS](https://github.com/godotengine/godot/blob/master/.github/CODEOWNERS)
+file, so you can follow a team's areas without being on the team. Team members can use it instead
+of team review requests: one digest line per PR rather than every later comment and push. The
+preview lists the valid team names if you misspell one.
+
 `my_lines` blames the changed lines at the PR's merge-base and honours Godot's
 `.git-blame-ignore-revs`. It isn't affected by `ignore: paths`. PRs that only add code have
 nothing to blame. If `my_lines` is too noisy, e.g. because you approve large PRs you only partly
@@ -63,9 +69,11 @@ review, try `most_lines` (fewer, more relevant matches) or `my_written_lines`. R
 | `my_lines: 1` | ~1 in 6 | ~53% |
 | `most_lines: true` | ~1 in 3 | ~33% |
 | `my_written_lines: [20%, 40]` | ~1 in 3 | ~18% |
+| *For comparison: CODEOWNERS team requests* | *~1 in 10* | *~70%* |
 
 Measured on ~1000 past Godot PRs that changed existing code. Interest is more than reviewing, so
-compare rows rather than reading the numbers literally.
+compare rows rather than reading the numbers literally. Team requests also subscribe you to every
+later comment and push.
 
 ## How it works
 

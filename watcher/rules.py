@@ -2,9 +2,9 @@
 
 The rules are the first ```yaml (or plain ```) fenced block in the body:
 
-    match:    {paths, my_lines, my_written_lines, most_lines, authors,   any one triggers
-               labels, milestones, branches}
-    ignore:   {paths, authors, labels, milestones, branches}             files / PRs to leave out
+    match:    {paths, teams, my_lines, my_written_lines, most_lines,     any one triggers
+               authors, labels, milestones, branches}
+    ignore:   {paths, teams, authors, labels, milestones, branches}      files / PRs to leave out
     include:  [drafts, own, other_branches, involved]                    all off by default
     digest:   hourly | daily | weekly
 
@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 import pathspec
 import yaml
 
+from .codeowners import team_slug
 from .config import DIGEST_PERIODS
 from .render import code_span
 
@@ -30,6 +31,7 @@ PERCENT = re.compile(r"^\s*(\d+(?:\.\d+)?)\s*%\s*$")
 TOP_KEYS = ("match", "ignore", "include", "digest")
 LIST_KEYS = {
     "paths": "a list of path patterns",
+    "teams": "a list of team names from CODEOWNERS, e.g. `core`",
     "authors": "a list of GitHub logins",
     "labels": "a list of label names",
     "milestones": "a list of milestone names",
@@ -51,6 +53,7 @@ def anchored(pattern: str) -> str:
 class Rules:
     # match
     paths: list[str] = field(default_factory=list)
+    teams: list[str] = field(default_factory=list)
     my_lines_share: float | None = None   # `20%`
     my_lines_count: int | None = None     # `40`
     my_written_lines_share: float | None = None
@@ -66,6 +69,7 @@ class Rules:
     ignore_labels: list[str] = field(default_factory=list)
     ignore_milestones: list[str] = field(default_factory=list)
     ignore_branches: list[str] = field(default_factory=list)
+    ignore_teams: list[str] = field(default_factory=list)
     # include
     drafts: bool = False
     own: bool = False
@@ -130,6 +134,8 @@ def parse_list(section: str, key: str, value, errors: list[str]) -> list[str] | 
         return None if bad else value
     if key == "authors":
         return [v.strip().lstrip("@").lower() for v in value]
+    if key == "teams":
+        return [team_slug(v) for v in value]
     return value
 
 

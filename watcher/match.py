@@ -3,6 +3,7 @@ from contextlib import contextmanager
 
 import pathspec
 
+from .codeowners import CodeOwners
 from .render import code_span
 from .rules import Rules
 
@@ -22,8 +23,10 @@ def time_limit(seconds: float):
         signal.signal(signal.SIGALRM, old)
 
 
-def match(rules: Rules, rec: dict, login: str, exclude: pathspec.PathSpec) -> list[tuple[str, str]]:
-    """Why an analysed PR matches a subscriber's rules, as (trigger, text) pairs; empty if it doesn't."""
+def match(rules: Rules, rec: dict, login: str, exclude: pathspec.PathSpec,
+          owners: CodeOwners | None = None) -> list[tuple[str, str]]:
+    """Why an analysed PR matches a subscriber's rules, as (trigger, text) pairs; empty if it doesn't.
+    Without `owners` (the target's CODEOWNERS), `teams` rules match and ignore nothing."""
     labels = set(rec.get("labels", []))
     author = rec.get("author")
     if author == login and not rules.own:
@@ -35,14 +38,22 @@ def match(rules: Rules, rec: dict, login: str, exclude: pathspec.PathSpec) -> li
         return []
 
     reasons = []
-    if rules.path_specs:
+    if rules.path_specs or rules.teams:
+        ignored_teams = set(rules.ignore_teams) if owners else set()
         files = [f for f in rec.get("files", [])
-                 if not rules.ignore_spec.match_file(f) and not exclude.match_file(f)]
+                 if not rules.ignore_spec.match_file(f) and not exclude.match_file(f)
+                 and not (ignored_teams and owners.teams_of(f) & ignored_teams)]
         for pattern, spec in rules.path_specs:
             hits = [f for f in files if spec.match_file(f)]
             if hits:
                 more = f" +{len(hits) - 1} more" if len(hits) > 1 else ""
                 reasons.append(("paths", f"{code_span(pattern, 40)} → {code_span(hits[0])}{more}"))
+                break
+        for team in rules.teams if owners else ():
+            hits = [f for f in files if team in owners.teams_of(f)]
+            if hits:
+                more = f" +{len(hits) - 1} more" if len(hits) > 1 else ""
+                reasons.append(("teams", f"team {code_span(team, 40)} → {code_span(hits[0])}{more}"))
                 break
     if (rules.my_lines or rules.my_written_lines or rules.most_lines) and rec.get("old_lines"):
         total = rec["old_lines"]
@@ -80,7 +91,8 @@ def match(rules: Rules, rec: dict, login: str, exclude: pathspec.PathSpec) -> li
     return reasons
 
 
-def diagnose(rules: Rules, recs: list[dict], login: str, repo_files: list[str] | None = None) -> list[str]:
+def diagnose(rules: Rules, recs: list[dict], login: str, repo_files: list[str] | None = None,
+             owners: CodeOwners | None = None) -> list[str]:
     """Hints for tuning rules, from the indexed PRs (ignoring filters) and the repository's files.
     Paths are only checked against `repo_files`: a path no recent PR touched is still fine."""
     notes = []
@@ -88,6 +100,11 @@ def diagnose(rules: Rules, recs: list[dict], login: str, repo_files: list[str] |
         if not any(spec.match_file(f) for f in repo_files):
             notes.append(f"{code_span(pattern, 40)} matches no file in the repository. Paths start at the "
                          "repository root; use `**/` to match anywhere.")
+    if (rules.teams or rules.ignore_teams) and owners is None:
+        notes.append("Couldn't read the repository's CODEOWNERS file, so `teams` matches nothing for now.")
+    elif unknown := [t for t in dict.fromkeys(rules.teams + rules.ignore_teams) if t not in owners.teams]:
+        notes.append(f"No team {', '.join(code_span(t, 40) for t in unknown)} in CODEOWNERS. "
+                     f"Teams there: {', '.join(code_span(t, 40) for t in sorted(owners.teams))}.")
     seen_labels = {label for r in recs for label in r.get("labels", [])}
     for label in sorted(set(rules.labels) | set(rules.ignore_labels)):
         if label not in seen_labels:

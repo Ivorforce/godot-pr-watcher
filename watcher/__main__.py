@@ -15,7 +15,7 @@ import sys
 import time
 from pathlib import Path
 
-from . import notify
+from . import codeowners, notify
 from .config import load_config
 from .gh import GitHub
 from .index import update_index
@@ -61,8 +61,9 @@ def main():
             stage(notify.ensure_label, cfg, gh, st)
             active = stage(notify.load_subscriptions, cfg, gh, st)
             if active is not None:
-                stage(notify.queue_matches, cfg, st, active)
-                stage(notify.send_digests, cfg, gh, st, active, args.dry_run)
+                owners = stage(codeowners.load, cfg, gh) if notify.uses_teams(active) else None
+                stage(notify.queue_matches, cfg, st, active, owners)
+                stage(notify.send_digests, cfg, gh, st, active, args.dry_run, owners)
                 if not args.dry_run:
                     stage(notify.keep_alive, cfg, gh, active)
             stage(notify.evaluate, cfg, gh, st)
@@ -83,7 +84,8 @@ def main():
         if errors:
             sys.exit("\n".join(errors))
         files = notify.repo_files(cfg, gh) if rules.paths else None
-        items, per_trigger, notes = notify.preview_matches(cfg, st, rules, args.login.lower(), files)
+        owners = codeowners.load(cfg, gh) if rules.teams or rules.ignore_teams else None
+        items, per_trigger, notes = notify.preview_matches(cfg, st, rules, args.login.lower(), files, owners)
         for rec, reasons in items:
             print(f"#{rec['n']} {rec['title']} — {' · '.join(reasons)}")
         print(f"\n{len(items)} matches ({dict(per_trigger)})", *notes, sep="\n")

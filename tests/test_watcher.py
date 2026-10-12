@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pathspec
 
+from watcher.codeowners import CodeOwners, team_slug
 from watcher.config import Config
 from watcher.index import old_lines_from_patch
 from watcher.match import diagnose, match, time_limit
@@ -184,6 +185,25 @@ class MatchTest(unittest.TestCase):
         self.assertEqual(texts(r, pr(direct={"other": 1})), [])
         self.assertEqual(parse_rules("```yaml\nmatch: {most_lines: yes please}\n```")[0], None)
         self.assertEqual(parse_rules("```yaml\nmatch: {most_lines: false}\n```")[0], None)  # nothing to match
+
+    def test_teams(self):
+        owners = CodeOwners("# comment\n*.cpp @godotengine/buildsystem\n/core/ @godotengine/core @someone\n"
+                            "/core/io/ @godotengine/network\n")
+        self.assertEqual(owners.teams_of("core/io/file.cpp"), {"network"})  # last matching rule wins
+        self.assertEqual(owners.teams_of("core/variant/variant.cpp"), {"core"})
+        self.assertEqual(owners.teams_of("editor/x.cpp"), {"buildsystem"})
+        self.assertEqual(owners.teams, {"buildsystem", "core", "network"})
+        self.assertEqual([team_slug(t) for t in ("@godotengine/Core", "godotengine/core", "core")], ["core"] * 3)
+        r = m("teams: ['@godotengine/core']")
+        self.assertEqual(match(r, pr(), "me", EXCLUDE, owners), [("teams", "team `core` → `core/variant/variant.cpp`")])
+        self.assertEqual(match(r, pr(files=["core/io/file.cpp"]), "me", EXCLUDE, owners), [])
+        self.assertEqual(match(r, pr(), "me", EXCLUDE), [])  # CODEOWNERS unavailable
+        ignoring = m("paths: [core/]", ignore="{teams: [network]}")
+        self.assertEqual(match(ignoring, pr(files=["core/io/file.cpp"]), "me", EXCLUDE, owners), [])
+        self.assertTrue(match(ignoring, pr(), "me", EXCLUDE, owners))
+        notes = diagnose(m("teams: [core, nope]"), [pr()], "me", owners=owners)
+        self.assertEqual(len(notes), 1)
+        self.assertIn("`nope`", notes[0])
 
     def test_authors(self):
         r = m("authors: [someone]")

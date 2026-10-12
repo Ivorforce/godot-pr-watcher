@@ -4,7 +4,8 @@ import re
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta, timezone
 
-from . import render
+from . import codeowners, render
+from .codeowners import CodeOwners
 from .config import DIGEST_PERIODS, Config
 from .gh import GitHub, GitHubError
 from .index import parse_time
@@ -69,7 +70,11 @@ def load_subscriptions(cfg: Config, gh: GitHub, st: State) -> dict[str, dict]:
     return active
 
 
-def queue_matches(cfg: Config, st: State, active: dict[str, dict]):
+def uses_teams(active: dict[str, dict]) -> bool:
+    return any(a["rules"] and (a["rules"].teams or a["rules"].ignore_teams) for a in active.values())
+
+
+def queue_matches(cfg: Config, st: State, active: dict[str, dict], owners: CodeOwners | None = None):
     """Queue newly matching PRs for each subscription. Every PR is notified at most once per issue."""
     exclude = cfg.exclude_spec
     sent = {(str(r["issue"]), r["pr"]) for r in st.notified}
@@ -87,7 +92,7 @@ def queue_matches(cfg: Config, st: State, active: dict[str, dict]):
                             or parse_time(rec.get(start_key) or rec["created_at"]) < since
                             or str(n) in sub["queue"] or (key, n) in sent):
                         continue
-                    reasons = match(a["rules"], rec, a["login"], exclude)
+                    reasons = match(a["rules"], rec, a["login"], exclude, owners)
                     if reasons:
                         sub["queue"][str(n)] = [text for _, text in reasons]
         except TimeoutError:
@@ -128,7 +133,8 @@ def involvement(cfg: Config, gh: GitHub, numbers: list[int]) -> dict[int, set[st
     return out
 
 
-def send_digests(cfg: Config, gh: GitHub, st: State, active: dict[str, dict], dry_run: bool):
+def send_digests(cfg: Config, gh: GitHub, st: State, active: dict[str, dict], dry_run: bool,
+                 owners: CodeOwners | None = None):
     """Post due digests. A digest is recorded as sent *before* posting, so a failure later in the
     run (or a failed post) can never make it go out twice; at worst one digest is lost.
     PRs the subscriber is already involved in are recorded as skipped, unless `include: involved`."""
@@ -149,7 +155,7 @@ def send_digests(cfg: Config, gh: GitHub, st: State, active: dict[str, dict], dr
                 for n in sorted(sub["queue"], key=int):
                     rec = st.index.get(int(n))
                     if rec and rec.get("state") != "closed":
-                        reasons = match(a["rules"], rec, a["login"], cfg.exclude_spec)
+                        reasons = match(a["rules"], rec, a["login"], cfg.exclude_spec, owners)
                         if reasons:
                             items.append((rec, [text for _, text in reasons]))
         except TimeoutError:
@@ -222,15 +228,16 @@ def _list_repo_files(cfg: Config, gh: GitHub) -> list[str] | None:
     return None if tree.get("truncated") else [t["path"] for t in tree["tree"] if t["type"] == "blob"]
 
 
-def preview_matches(cfg: Config, st: State, rules, login: str, files: list[str] | None = None):
+def preview_matches(cfg: Config, st: State, rules, login: str, files: list[str] | None = None,
+                    owners: CodeOwners | None = None):
     """(matches as (rec, reason texts), matches per trigger, tuning notes). `files` (the repository's
     paths) enables the check for path patterns that match nothing.
     Raises TimeoutError if the rules are too slow to evaluate."""
     exclude = cfg.exclude_spec
     recs = [rec for rec in st.index.values() if rec.get("analyzed_sha") == rec.get("head_sha")]
     with time_limit(MATCH_SECONDS * 2):
-        matched = [(rec, why) for rec in recs if (why := match(rules, rec, login, exclude))]
-        notes = diagnose(rules, recs, login, files)
+        matched = [(rec, why) for rec in recs if (why := match(rules, rec, login, exclude, owners))]
+        notes = diagnose(rules, recs, login, files, owners)
     per_trigger = Counter(kind for _, why in matched for kind in {k for k, _ in why})
     items = sorted(((rec, [text for _, text in why]) for rec, why in matched), key=lambda x: -x[0]["n"])
     return items, per_trigger, notes
@@ -253,7 +260,8 @@ def preview_issue(cfg: Config, gh: GitHub, st: State, number: int, dry_run: bool
     if rules:
         try:
             files = repo_files(cfg, gh) if rules.paths else None
-            items, per_trigger, notes = preview_matches(cfg, st, rules, login, files)
+            owners = codeowners.load(cfg, gh) if rules.teams or rules.ignore_teams else None
+            items, per_trigger, notes = preview_matches(cfg, st, rules, login, files, owners)
         except TimeoutError:
             rules, errors = None, ["Your path patterns take too long to evaluate. Simplify them."]
     body = render.preview(cfg, errors, items, per_trigger, notes, cfg.index_window_days / 7)
