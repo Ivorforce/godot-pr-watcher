@@ -3,8 +3,12 @@
 The rules are the first ```yaml (or plain ```) fenced block in the body:
 
     match:    {paths, teams, my_lines, my_written_lines, most_lines,     any one triggers
-               authors, labels, milestones, branches}
-    ignore:   {paths, teams, authors, labels, milestones, branches}      files / PRs to leave out
+               authors, labels, milestones, branches, all}
+    ignore:   {paths, teams, authors, labels, milestones, branches, all} files / PRs to leave out
+
+`all:` is one entry or a list of entries with the same keys as its section; all keys of an entry
+must hold (e.g. an author *and* a team). In `ignore: all:`, paths and teams ask whether the PR
+touches any such file, so the entry leaves out whole PRs.
     include:  [drafts, own, other_branches, involved]                    all off by default
     digest:   hourly | daily | weekly
 
@@ -26,6 +30,7 @@ MAX_BODY = 20_000
 MAX_PATTERNS = 50
 MAX_PATTERN_LEN = 200
 MAX_WILDCARD_RUNS = 4
+MAX_ALL = 10           # entries per `all:`
 PERCENT = re.compile(r"^\s*(\d+(?:\.\d+)?)\s*%\s*$")
 
 TOP_KEYS = ("match", "ignore", "include", "digest")
@@ -38,7 +43,8 @@ LIST_KEYS = {
     "branches": "a list of branch names",
 }
 LINE_KEYS = ("my_lines", "my_written_lines")  # written or approved / written only
-MATCH_KEYS = (*LIST_KEYS, *LINE_KEYS, "most_lines")
+MATCH_KEYS = (*LIST_KEYS, *LINE_KEYS, "most_lines", "all")
+IGNORE_KEYS = (*LIST_KEYS, "all")
 INCLUDE = ("drafts", "own", "other_branches", "involved")
 MY_LINES = "a percentage like `20%`, a line count like `40`, or both: `[20%, 40]`"
 
@@ -70,6 +76,9 @@ class Rules:
     ignore_milestones: list[str] = field(default_factory=list)
     ignore_branches: list[str] = field(default_factory=list)
     ignore_teams: list[str] = field(default_factory=list)
+    # all: (entries are Rules that use only the match fields)
+    match_all: list["Rules"] = field(default_factory=list)
+    ignore_all: list["Rules"] = field(default_factory=list)
     # include
     drafts: bool = False
     own: bool = False
@@ -85,6 +94,14 @@ class Rules:
     @property
     def my_lines(self) -> bool:
         return self.my_lines_share is not None or self.my_lines_count is not None
+
+    @property
+    def uses_paths(self) -> bool:
+        return bool(self.paths or any(e.paths for e in self.match_all + self.ignore_all))
+
+    @property
+    def uses_teams(self) -> bool:
+        return bool(self.teams or self.ignore_teams or any(e.teams for e in self.match_all + self.ignore_all))
 
     @property
     def my_written_lines(self) -> bool:
@@ -154,7 +171,7 @@ def parse_section(name: str, value, allowed: tuple[str, ...], errors: list[str])
             if isinstance(v, bool):
                 out["most_lines"] = v
             else:
-                errors.append("`match: most_lines:` must be `true` or `false`.")
+                errors.append(f"`{name}: most_lines:` must be `true` or `false`.")
         elif key in LINE_KEYS:
             # One value, or a list with a share and a count (either one triggers).
             parsed = [parse_my_lines(x) for x in (v if isinstance(v, list) else [v])]
@@ -165,10 +182,28 @@ def parse_section(name: str, value, allowed: tuple[str, ...], errors: list[str])
                 out[f"{key}_share"] = shares[0] if shares else None
                 out[f"{key}_count"] = counts[0] if counts else None
             else:
-                errors.append(f"`match: {key}:` must be {MY_LINES}.")
+                errors.append(f"`{name}: {key}:` must be {MY_LINES}.")
+        elif key == "all":
+            entries = v if isinstance(v, list) else [v]
+            if not entries or not all(isinstance(e, dict) and e for e in entries):
+                errors.append(f"`{name}: all:` must be entries with keys that must all match, e.g. "
+                              f"`- {{authors: [someone], teams: [core]}}`.")
+            elif len(entries) > MAX_ALL:
+                errors.append(f"`{name}: all:` has more than {MAX_ALL} entries.")
+            else:
+                inner = tuple(k for k in allowed if k != "all")
+                parsed = [parse_section(f"{name}: all", e, inner, errors) for e in entries]
+                if not errors and not all(has_trigger(p) for p in parsed):
+                    errors.append(f"Each entry in `{name}: all:` needs at least one key with a value.")
+                out["all"] = [Rules(**p) for p in parsed] if not errors else []
         elif (parsed := parse_list(name, key, v, errors)) is not None:
             out[key] = parsed
     return out
+
+
+def has_trigger(kw: dict) -> bool:
+    return any(kw.get(k) for k in (*LIST_KEYS, "most_lines", "all", "match_all")) or any(
+        kw.get(f"{k}_{part}") is not None for k in LINE_KEYS for part in ("share", "count"))
 
 
 def parse_rules(body: str | None) -> tuple[Rules | None, list[str]]:
@@ -198,9 +233,12 @@ def parse_rules(body: str | None) -> tuple[Rules | None, list[str]]:
         elif value is None:
             continue
         elif key == "match":
-            kw.update(parse_section("match", value, MATCH_KEYS, errors))
+            section = parse_section("match", value, MATCH_KEYS, errors)
+            if "all" in section:
+                section["match_all"] = section.pop("all")
+            kw.update(section)
         elif key == "ignore":
-            kw.update({f"ignore_{k}": v for k, v in parse_section("ignore", value, tuple(LIST_KEYS), errors).items()})
+            kw.update({f"ignore_{k}": v for k, v in parse_section("ignore", value, IGNORE_KEYS, errors).items()})
         elif key == "include":
             items = value if isinstance(value, list) else [value]
             bad = [x for x in items if x not in INCLUDE]
@@ -213,9 +251,7 @@ def parse_rules(body: str | None) -> tuple[Rules | None, list[str]]:
                 kw["digest"] = value
             else:
                 errors.append(f"`digest:` must be one of {', '.join(DIGEST_PERIODS)}.")
-    has_trigger = any(kw.get(k) for k in (*LIST_KEYS, "most_lines")) or any(
-        kw.get(f"{k}_{part}") is not None for k in LINE_KEYS for part in ("share", "count"))
-    if not errors and not has_trigger:
+    if not errors and not has_trigger({k: v for k, v in kw.items() if not k.startswith("ignore_")}):
         errors.append("Nothing to match: add at least one key under `match:`, e.g. `paths: [core/]`.")
     if errors:
         return None, errors

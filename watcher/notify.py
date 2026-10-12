@@ -71,7 +71,7 @@ def load_subscriptions(cfg: Config, gh: GitHub, st: State) -> dict[str, dict]:
 
 
 def uses_teams(active: dict[str, dict]) -> bool:
-    return any(a["rules"] and (a["rules"].teams or a["rules"].ignore_teams) for a in active.values())
+    return any(a["rules"] and a["rules"].uses_teams for a in active.values())
 
 
 def queue_matches(cfg: Config, st: State, active: dict[str, dict], owners: CodeOwners | None = None):
@@ -259,8 +259,8 @@ def preview_issue(cfg: Config, gh: GitHub, st: State, number: int, dry_run: bool
     items, per_trigger, notes = [], Counter(), []
     if rules:
         try:
-            files = repo_files(cfg, gh) if rules.paths else None
-            owners = codeowners.load(cfg, gh) if rules.teams or rules.ignore_teams else None
+            files = repo_files(cfg, gh) if rules.uses_paths else None
+            owners = codeowners.load(cfg, gh) if rules.uses_teams else None
             items, per_trigger, notes = preview_matches(cfg, st, rules, login, files, owners)
         except TimeoutError:
             rules, errors = None, ["Your path patterns take too long to evaluate. Simplify them."]

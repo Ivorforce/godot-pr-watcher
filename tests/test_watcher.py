@@ -205,6 +205,38 @@ class MatchTest(unittest.TestCase):
         self.assertEqual(len(notes), 1)
         self.assertIn("`nope`", notes[0])
 
+    def test_all(self):
+        both = rules("match:\n  all:\n    - authors: [someone]\n      paths: [core/]")
+        self.assertEqual(texts(both, pr()), ["`core/` → `core/variant/variant.cpp` + author someone"])
+        self.assertEqual(texts(both, pr(files=["editor/x.cpp"])), [])
+        self.assertEqual(texts(both, pr(author="other")), [])
+        single = rules("match:\n  labels: [bug]\n  all: {authors: [someone], my_lines: 30%}")
+        self.assertEqual(texts(single, pr(direct={"me": 4})), ["your lines 4 of 10 + author someone"])
+        self.assertEqual(texts(single, pr(labels=["bug"])), ["label `bug`"])  # plain keys still OR
+        backport = rules("match:\n  all:\n    - branches: [3.x]\n      labels: [bug]")
+        self.assertEqual([k for k, _ in match(backport, pr(base_ref="3.x", default_branch=False, labels=["bug"]),
+                                               "me", EXCLUDE)], ["branches"])
+
+    def test_ignore_all(self):
+        r = rules("match:\n  paths: [core/]\nignore:\n  all:\n    - authors: [someone]\n      paths: ['**/tests/']")
+        self.assertEqual(texts(r, pr(files=["core/a.cpp", "core/tests/t.h"])), [])  # whole PR left out
+        self.assertTrue(texts(r, pr(files=["core/a.cpp"])))
+        self.assertTrue(texts(r, pr(author="other", files=["core/a.cpp", "core/tests/t.h"])))
+
+    def test_all_errors(self):
+        for text in ["match: {all: []}", "match: {all: [{}]}", "match: {all: [3]}", "match: {all: [{nope: 1}]}",
+                     "match: {all: [{all: [{paths: [a]}]}]}", "match: {all: [{authors: [a], my_lines: lots}]}",
+                     "match: {all: [" + ", ".join(["{authors: [a]}"] * 11) + "]}",
+                     "match: {paths: [a]}\nignore: {all: [{my_lines: 20%}]}"]:
+            r, errors = parse_rules(f"```yaml\n{text}\n```")
+            self.assertIsNone(r, text)
+            self.assertTrue(errors, text)
+        self.assertIsNone(parse_rules("```yaml\nignore: {all: [{authors: [a]}]}\n```")[0])  # nothing to match
+
+    def test_all_diagnose(self):
+        r = rules("match:\n  all:\n    - authors: [ghost]\n      labels: [bgu]")
+        self.assertEqual(len(diagnose(r, [pr(labels=["bug"])], "me")), 2)
+
     def test_authors(self):
         r = m("authors: [someone]")
         self.assertEqual(texts(r, pr()), ["author someone"])

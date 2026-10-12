@@ -34,9 +34,15 @@ match:                     # notify if any of these match
   labels: [topic:gdscript]
   milestones: ["3.7"]
   branches: [3.x]
+  all:                     # entries whose keys must all match
+    - authors: [someone]
+      teams: [gdscript]    # someone's PRs, but only those touching GDScript
 ignore:                    # files, or PRs, to leave out; same keys except the line counts
   paths: ["**/tests/"]
   labels: [documentation]
+  all:
+    - authors: [someone]
+      paths: ["**/tests/"] # someone's PRs that touch tests
 include: [drafts, own, other_branches, involved]  # all off by default
 digest: daily              # hourly, daily (default) or weekly
 ```
@@ -52,6 +58,9 @@ The preview points out path patterns that match no file in the repository, and l
 Labels and milestones are often added hours after a PR opens. One that triggers a match works
 whenever it arrives. One under `ignore:` only helps if it's there before your digest goes out,
 which the daily default usually allows.
+
+Lists within a key mean "any of these". Under `ignore:`, plain `paths` and `teams` leave out
+individual files; inside `all:` they leave out the whole PR if it touches such a file.
 
 `teams` uses Godot's [CODEOWNERS](https://github.com/godotengine/godot/blob/master/.github/CODEOWNERS)
 file, so you can follow a team's areas without being on the team. Team members can use it instead
