@@ -3,7 +3,7 @@
 The rules are the first ```yaml (or plain ```) fenced block in the body:
 
     match:    {paths, teams, my_lines, my_written_lines, most_lines,     any one triggers
-               authors, labels, milestones, branches, all}
+               lines_by, written_lines_by, authors, labels, milestones, branches, all}
     ignore:   {paths, teams, authors, labels, milestones, branches, all} files / PRs to leave out
 
 `all:` is one entry or a list of entries with the same keys as its section; all keys of an entry
@@ -31,6 +31,7 @@ MAX_PATTERNS = 50
 MAX_PATTERN_LEN = 200
 MAX_WILDCARD_RUNS = 4
 MAX_ALL = 10           # entries per `all:`
+MAX_PEOPLE = 10        # logins per `lines_by:`
 PERCENT = re.compile(r"^\s*(\d+(?:\.\d+)?)\s*%\s*$")
 
 TOP_KEYS = ("match", "ignore", "include", "digest")
@@ -43,7 +44,8 @@ LIST_KEYS = {
     "branches": "a list of branch names",
 }
 LINE_KEYS = ("my_lines", "my_written_lines")  # written or approved / written only
-MATCH_KEYS = (*LIST_KEYS, *LINE_KEYS, "most_lines", "all")
+BY_KEYS = ("lines_by", "written_lines_by")     # the same for other people, per login
+MATCH_KEYS = (*LIST_KEYS, *LINE_KEYS, "most_lines", *BY_KEYS, "all")
 IGNORE_KEYS = (*LIST_KEYS, "all")
 INCLUDE = ("drafts", "own", "other_branches", "involved")
 MY_LINES = "a percentage like `20%`, a line count like `40`, or both: `[20%, 40]`"
@@ -65,6 +67,8 @@ class Rules:
     my_written_lines_share: float | None = None
     my_written_lines_count: int | None = None
     most_lines: bool = False              # more lines (written or approved) than anyone but the author
+    lines_by: dict[str, tuple[float | None, int | None]] = field(default_factory=dict)  # login -> (share, count)
+    written_lines_by: dict[str, tuple[float | None, int | None]] = field(default_factory=dict)
     authors: list[str] = field(default_factory=list)
     labels: list[str] = field(default_factory=list)
     milestones: list[str] = field(default_factory=list)
@@ -136,6 +140,18 @@ def parse_my_lines(value) -> tuple[float | None, int | None] | None:
     return None
 
 
+def parse_threshold(value) -> tuple[float | None, int | None] | None:
+    """One `parse_my_lines` value, or a list with a share and a count (either one triggers)."""
+    parsed = [parse_my_lines(x) for x in (value if isinstance(value, list) else [value])]
+    if not parsed or None in parsed:
+        return None
+    shares = [share for share, _ in parsed if share is not None]
+    counts = [count for _, count in parsed if count is not None]
+    if len(shares) > 1 or len(counts) > 1:
+        return None
+    return (shares[0] if shares else None), (counts[0] if counts else None)
+
+
 def parse_list(section: str, key: str, value, errors: list[str]) -> list[str] | None:
     if isinstance(value, str):
         value = [value]
@@ -173,16 +189,23 @@ def parse_section(name: str, value, allowed: tuple[str, ...], errors: list[str])
             else:
                 errors.append(f"`{name}: most_lines:` must be `true` or `false`.")
         elif key in LINE_KEYS:
-            # One value, or a list with a share and a count (either one triggers).
-            parsed = [parse_my_lines(x) for x in (v if isinstance(v, list) else [v])]
-            ok = bool(parsed) and None not in parsed
-            shares = [share for share, _ in parsed if share is not None] if ok else []
-            counts = [count for _, count in parsed if count is not None] if ok else []
-            if ok and len(shares) <= 1 and len(counts) <= 1:
-                out[f"{key}_share"] = shares[0] if shares else None
-                out[f"{key}_count"] = counts[0] if counts else None
+            if (threshold := parse_threshold(v)) is not None:
+                out[f"{key}_share"], out[f"{key}_count"] = threshold
             else:
                 errors.append(f"`{name}: {key}:` must be {MY_LINES}.")
+        elif key in BY_KEYS:
+            if not (isinstance(v, dict) and v and all(isinstance(login, str) and login.strip() for login in v)):
+                errors.append(f"`{name}: {key}:` must be GitHub logins with a threshold each, "
+                              f"e.g. `{key}: {{someone: [20%, 40]}}`.")
+            elif len(v) > MAX_PEOPLE:
+                errors.append(f"`{name}: {key}:` has more than {MAX_PEOPLE} logins.")
+            else:
+                people = {}
+                for login, threshold in v.items():
+                    if (parsed := parse_threshold(threshold)) is None:
+                        errors.append(f"`{name}: {key}: {login}:` must be {MY_LINES}.")
+                    people[login.strip().lstrip("@").lower()] = parsed
+                out[key] = people
         elif key == "all":
             entries = v if isinstance(v, list) else [v]
             if not entries or not all(isinstance(e, dict) and e for e in entries):
@@ -202,7 +225,7 @@ def parse_section(name: str, value, allowed: tuple[str, ...], errors: list[str])
 
 
 def has_trigger(kw: dict) -> bool:
-    return any(kw.get(k) for k in (*LIST_KEYS, "most_lines", "all", "match_all")) or any(
+    return any(kw.get(k) for k in (*LIST_KEYS, *BY_KEYS, "most_lines", "all", "match_all")) or any(
         kw.get(f"{k}_{part}") is not None for k in LINE_KEYS for part in ("share", "count"))
 
 

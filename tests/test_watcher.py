@@ -177,6 +177,26 @@ class MatchTest(unittest.TestCase):
         self.assertEqual(match(both, pr(direct={"me": 3}, transitive={"me": 8}), "me", EXCLUDE), [("my_lines", "your lines 3 + approved 8 of 10")])
         self.assertEqual(match(both, pr(direct={"me": 3}), "me", EXCLUDE), [("my_written_lines", "your lines 3 of 10")])
 
+    def test_lines_by(self):
+        r = m("lines_by: {'@Ivor': [30%, 40]}, written_lines_by: {other: 50%}")
+        self.assertEqual(r.lines_by, {"ivor": (0.3, 40)})
+        self.assertEqual(texts(r, pr(direct={"ivor": 2})), [])
+        self.assertEqual(texts(r, pr(direct={"ivor": 2}, transitive={"ivor": 1})), ["by ivor: lines 2 + approved 1 of 10"])
+        self.assertEqual(texts(r, pr(transitive={"other": 9})), [])  # written only
+        self.assertEqual(match(r, pr(direct={"ivor": 3, "other": 5}), "me", EXCLUDE), [("lines_by", "by ivor: lines 3 of 10")])
+        self.assertEqual(texts(r, pr(direct={"other": 5})), ["by other: lines 5 of 10"])
+        own = m("my_lines: 20%, lines_by: {ivor: 20%}")  # own and followed lines each show
+        self.assertEqual(texts(own, pr(direct={"me": 2, "ivor": 2})), ["your lines 2 of 10", "by ivor: lines 2 of 10"])
+        nested = rules("match:\n  all: {labels: [bug], lines_by: {ivor: 1}}")
+        self.assertEqual(texts(nested, pr(labels=["bug"], direct={"ivor": 1})), ["by ivor: lines 1 of 10 + label `bug`"])
+        for text in ["match: {lines_by: 20%}", "match: {lines_by: {}}", "match: {lines_by: {ivor: lots}}",
+                     "match: {lines_by: [ivor]}", "match: {paths: [a]}\nignore: {lines_by: {ivor: 1}}",
+                     "match: {lines_by: {" + ", ".join(f"p{i}: 1" for i in range(11)) + "}}"]:
+            self.assertIsNone(parse_rules(f"```yaml\n{text}\n```")[0], text)
+        notes = diagnose(m("lines_by: {ivor: 1, ghost: 1}, written_lines_by: {ghost: 1}"), [pr(transitive={"ivor": 1})], "me")
+        self.assertEqual(len(notes), 1)
+        self.assertIn("`ghost`", notes[0])
+
     def test_most_lines(self):
         r = m("most_lines: true")
         self.assertEqual(texts(r, pr(direct={"me": 1, "other": 1})), ["most lines: your lines 1 of 10"])

@@ -40,7 +40,7 @@ def checks(r: Rules, rec: dict, login: str, files: list[str], owners: CodeOwners
     if r.teams:
         out["teams"] = next((_file_hit(f"team {code_span(team, 40)}", hits) for team in r.teams if owners
                              and (hits := [f for f in files if team in owners.teams_of(f)])), None)
-    if r.my_lines or r.my_written_lines or r.most_lines:
+    if r.my_lines or r.my_written_lines or r.most_lines or r.lines_by or r.written_lines_by:
         total = rec.get("old_lines") or 0
         direct, transitive = rec.get("direct", {}), rec.get("transitive", {})
         mine, approved = direct.get(login, 0), transitive.get(login, 0)
@@ -49,6 +49,15 @@ def checks(r: Rules, rec: dict, login: str, files: list[str], owners: CodeOwners
         def reaches(count, share, at_least):
             return bool(total and count) and ((share is not None and count / total >= share)
                                               or (at_least is not None and count >= at_least))
+
+        def by(person, written):
+            """Reason text if `person`'s lines reach their threshold in `lines_by` / `written_lines_by`."""
+            share, at_least = (r.written_lines_by if written else r.lines_by)[person]
+            wrote, appr = direct.get(person, 0), 0 if written else transitive.get(person, 0)
+            if not reaches(min(wrote + appr, total), share, at_least):
+                return None
+            counts = " + ".join([f"lines {wrote}"] * bool(wrote) + [f"approved {appr}"] * bool(appr))
+            return f"by {person}: {counts} of {total}"
 
         def most(person):
             return min(direct.get(person, 0) + transitive.get(person, 0), total)
@@ -59,6 +68,9 @@ def checks(r: Rules, rec: dict, login: str, files: list[str], owners: CodeOwners
         if r.my_written_lines:
             out["my_written_lines"] = f"your lines {mine} of {total}" if reaches(
                 mine, r.my_written_lines_share, r.my_written_lines_count) else None
+        for key, written in (("lines_by", False), ("written_lines_by", True)):
+            if getattr(r, key):
+                out[key] = next((text for person in getattr(r, key) if (text := by(person, written))), None)
         if r.most_lines:
             count = most(login)
             out["most_lines"] = f"most lines: {parts} of {total}" if total and count and all(
@@ -77,7 +89,9 @@ def checks(r: Rules, rec: dict, login: str, files: list[str], owners: CodeOwners
     return out
 
 
-LINE_TRIGGERS = ("my_lines", "my_written_lines", "most_lines")  # only the first that holds is shown
+# Within each group, only the first trigger that holds is shown.
+LINE_TRIGGERS = ("my_lines", "my_written_lines", "most_lines")
+BY_TRIGGERS = ("lines_by", "written_lines_by")
 BRANCH_TRIGGERS = ("branches", "milestones")
 
 
@@ -102,8 +116,8 @@ def match(rules: Rules, rec: dict, login: str, exclude: pathspec.PathSpec,
     files = [f for f in changed if not rules.ignore_spec.match_file(f)
              and not (ignored_teams and owners.teams_of(f) & ignored_teams)]
     held = {k: text for k, text in checks(rules, rec, login, files, owners).items() if text}
-    shown = next((k for k in LINE_TRIGGERS if k in held), None)
-    reasons = [(k, text) for k, text in held.items() if k not in LINE_TRIGGERS or k == shown]
+    shown = {next((k for k in group if k in held), None) for group in (LINE_TRIGGERS, BY_TRIGGERS)}
+    reasons = [(k, text) for k, text in held.items() if k not in LINE_TRIGGERS + BY_TRIGGERS or k in shown]
     for entry in rules.match_all:
         c = checks(entry, rec, login, files, owners)
         if all(c.values()):
@@ -150,6 +164,10 @@ def diagnose(rules: Rules, recs: list[dict], login: str, repo_files: list[str] |
     for branch in names("branches"):
         if branch not in seen_branches:
             notes.append(f"No PR targeted the branch {code_span(branch, 40)}.")
+    seen_people = {p for r in recs for p in (*r.get("direct", {}), *r.get("transitive", {}))}
+    for person in dict.fromkeys(names("lines_by") + names("written_lines_by")):
+        if person not in seen_people:
+            notes.append(f"No recent PR changed lines by {code_span(person, 40)}. Check the spelling.")
     seen_authors = {r.get("author") for r in recs}
     for author in names("authors"):
         if author not in seen_authors:

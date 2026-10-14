@@ -30,6 +30,9 @@ match:                     # notify if any of these match
   my_lines: [20%, 40]      # ≥20% or ≥40 of the changed lines are yours or from PRs you approved
   my_written_lines: 20%    # same, but only lines you wrote
   most_lines: true         # you wrote or approved more of the changed lines than anyone else
+  lines_by:                # like my_lines, for someone else's lines
+    someone: [20%, 40]
+  written_lines_by: {someone: 20%}  # like my_written_lines
   authors: [someone]
   labels: [topic:gdscript]
   milestones: ["3.7"]
@@ -66,6 +69,10 @@ individual files; inside `all:` they leave out the whole PR if it touches such a
 file, so you can follow a team's areas without being on the team. Team members can use it instead
 of team review requests: one digest line per PR rather than every later comment and push. The
 preview lists the valid team names if you misspell one.
+
+`lines_by` and `written_lines_by` follow other people's lines, each with their own threshold, e.g. to
+take over reviewing from a maintainer who stepped down. "Lines" again means lines they wrote or
+lines from PRs they approved. Their own PRs still match.
 
 `my_lines` blames the changed lines at the PR's merge-base and honours Godot's
 `.git-blame-ignore-revs`. It isn't affected by `ignore: paths`. PRs that only add code have

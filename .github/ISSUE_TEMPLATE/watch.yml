@@ -20,6 +20,8 @@ body:
         - `my_lines`: `20%` (share of the lines a PR changes that you wrote or approved), `40` (line count), or both: `[20%, 40]`.
           `my_written_lines` is the same, but without lines from PRs you approved.
         - `most_lines: true`: PRs where you wrote or approved more of the changed lines than anyone else.
+        - `lines_by` / `written_lines_by`: the same as `my_lines` / `my_written_lines` for someone else, e.g. to take
+          over their reviewing: `{someone: [20%, 40]}`.
         - `authors`, `labels`, `milestones`, `branches`: lists of names.
         - `all:` entries combine keys that must all match, e.g. `- {authors: [someone], teams: [gdscript]}`.
         - `ignore:` takes the same keys, except the line counts.
