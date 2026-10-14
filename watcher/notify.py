@@ -157,7 +157,7 @@ def send_digests(cfg: Config, gh: GitHub, st: State, active: dict[str, dict], dr
                     if rec and rec.get("state") != "closed":
                         reasons = match(a["rules"], rec, a["login"], cfg.exclude_spec, owners)
                         if reasons:
-                            items.append((rec, [text for _, text in reasons]))
+                            items.append((rec, reasons))
         except TimeoutError:
             log.warning("issue %s: re-checking the queue took over %ds, skipped this run", key, MATCH_SECONDS)
             continue
@@ -176,11 +176,12 @@ def send_digests(cfg: Config, gh: GitHub, st: State, active: dict[str, dict], dr
             if rec.get("author") != a["login"] and a["login"] in involved.get(rec["n"], ())}
         for rec, reasons in items:
             st.notified.append({"issue": int(key), "login": a["login"], "pr": rec["n"],
-                                "at": now.isoformat(), "reasons": reasons, "engaged": None,
+                                "at": now.isoformat(), "reasons": [text for _, text in reasons],
+                                "kinds": sorted({kind for kind, _ in reasons}), "engaged": None,
                                 **({"skipped": "involved"} if rec["n"] in skip else {})})
         if skip:
             log.info("issue %s: skipped %d PRs the subscriber is already involved in", key, len(skip))
-        items = [(rec, reasons) for rec, reasons in items if rec["n"] not in skip]
+        items = [(rec, [text for _, text in reasons]) for rec, reasons in items if rec["n"] not in skip]
         if not items:
             continue
         body = render.digest(cfg, items[:MAX_DIGEST_ITEMS], len(items) - MAX_DIGEST_ITEMS,
@@ -314,3 +315,5 @@ def evaluate(cfg: Config, gh: GitHub, st: State):
     stats = st.engagement_stats()
     if stats[1]:
         log.info("evaluate: %d/%d evaluated notifications engaged (%.0f%%)", *stats, 100 * stats[0] / stats[1])
+    for kind, (engaged, evaluated) in sorted(st.engagement_by_kind().items()):
+        log.info("evaluate: %s: %d/%d engaged (%.0f%%)", kind, engaged, evaluated, 100 * engaged / evaluated)

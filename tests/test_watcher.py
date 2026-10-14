@@ -329,12 +329,14 @@ class StateTest(unittest.TestCase):
         new = datetime.now(timezone.utc).isoformat()
         with tempfile.TemporaryDirectory() as d:
             st = State(Path(d))
-            st.notified = [{"at": old, "engaged": True}, {"at": old, "engaged": None},
-                           {"at": new, "engaged": False}]
+            st.notified = [{"at": old, "engaged": True, "kinds": ["my_lines", "paths"]},
+                           {"at": old, "engaged": None, "kinds": ["my_lines"]},
+                           {"at": new, "engaged": False, "kinds": ["my_lines"]}]
             st.save()
             st = State(Path(d))
             self.assertEqual(len(st.notified), 1)
             self.assertEqual(st.engagement_stats(), (1, 2))
+            self.assertEqual(st.engagement_by_kind(), {"my_lines": (1, 2), "paths": (1, 1)})
 
 
 class QueueTest(unittest.TestCase):

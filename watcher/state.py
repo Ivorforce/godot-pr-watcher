@@ -1,6 +1,6 @@
 """Persistent state, stored as JSON files on the `data` branch.
 
-    state/meta.json            index cursor
+    state/meta.json            index cursor, engagement counts of pruned notifications
     state/index.jsonl          one analysed PR per line (PRs created within the index window)
     state/commits.json         commit sha -> [author login, associated PR number]
     state/prs.json             PR number -> {"author", "approvers"} (for transitive blame)
@@ -42,6 +42,22 @@ class State:
         return (self.meta.get("engaged", 0) + sum(r["engaged"] for r in done),
                 self.meta.get("evaluated", 0) + len(done))
 
+    def engagement_by_kind(self) -> dict[str, tuple[int, int]]:
+        """Trigger kind -> (engaged, evaluated), like engagement_stats. A notification with several
+        kinds counts towards each."""
+        stats = {k: list(v) for k, v in self.meta.get("engagement_by_kind", {}).items()}
+        for r in self.notified:
+            if r["engaged"] is not None:
+                self._count_kinds(stats, r)
+        return {k: tuple(v) for k, v in stats.items()}
+
+    @staticmethod
+    def _count_kinds(stats: dict, r: dict):
+        for kind in r.get("kinds", []):
+            counts = stats.setdefault(kind, [0, 0])
+            counts[0] += r["engaged"]
+            counts[1] += 1
+
     def prune(self):
         if len(self.commits) > MAX_COMMITS:
             self.commits = {}
@@ -55,6 +71,7 @@ class State:
             elif r["engaged"] is not None:
                 self.meta["evaluated"] = self.meta.get("evaluated", 0) + 1
                 self.meta["engaged"] = self.meta.get("engaged", 0) + r["engaged"]
+                self._count_kinds(self.meta.setdefault("engagement_by_kind", {}), r)
         self.notified = keep
 
     def save(self):

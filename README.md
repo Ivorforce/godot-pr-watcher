@@ -87,8 +87,8 @@ blame through GitHub's GraphQL API, no clone), matches them against open `watch`
 due digests. `preview.yml` answers new and edited issues; run it by hand to refresh one preview, or all of them
 after changing the watcher. State lives on the `data` branch, which
 also serves the Pages site: the feeds, and a redirect page so Godot PRs don't get "mentioned this"
-backlinks. A week after notifying you, it checks whether you took part in the PR, to see whether
-this is useful.
+backlinks. A week after notifying you, it checks whether you took part in the PR, and counts
+this per rule to tune the defaults.
 
 Line rules blame the changed lines at the PR's merge-base, honour Godot's
 `.git-blame-ignore-revs` and count all files, even those under `ignore: paths`. PRs that only add
