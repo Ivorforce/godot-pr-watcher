@@ -10,7 +10,7 @@ unofficial community tool, not run by the Godot project.
 
 [Open a "Watch pull requests" issue](../../issues/new/choose) to subscribe.
 
-The default rules will let you know when somebody changes code you wrote or reviewed,
+The default rules will let you know when somebody changes code you wrote or approved,
 which should be useful for most users. But you can also edit the rules to your needs.
 
 - First, a bot will reply to let you know your watcher is in effect.
@@ -50,34 +50,24 @@ include: [drafts, own, other_branches, involved]  # all off by default
 digest: daily              # hourly, daily (default) or weekly
 ```
 
-`other_branches` means PRs to branches other than `master` (e.g. cherry-picks); you get those
-anyway when they match through `branches` or `milestones`. `involved` keeps PRs where you're
-already a requested reviewer, assignee, commenter or reviewer, or @-mentioned in the description;
-GitHub notifies you about those already, so digests leave them out by default.
+A PR matches if anything under `match:` matches and nothing under `ignore:` does. Lists mean
+"any of these".
 
-You hear about each PR once, and only about PRs that became ready for review after you subscribed.
-The preview points out path patterns that match no file in the repository, and labels no recent PR had.
+- Under `ignore:`, `paths` and `teams` leave out single files; inside `all:` they leave out the whole PR.
+- `other_branches`: PRs to branches other than `master` (e.g. cherry-picks). Those matching
+  `branches` or `milestones` come through anyway.
+- `involved`: PRs where you're already a requested reviewer, assignee, commenter or reviewer, or
+  @-mentioned in the description. GitHub notifies you about those already.
+- You hear about each PR once, and only about PRs that became ready for review after you subscribed.
+- Labels and milestones are often added hours after a PR opens. Under `match:` they work whenever
+  they arrive; under `ignore:` only if they're there before your digest goes out, which the daily
+  default usually allows.
 
-Labels and milestones are often added hours after a PR opens. One that triggers a match works
-whenever it arrives. One under `ignore:` only helps if it's there before your digest goes out,
-which the daily default usually allows.
+### Picking a line rule
 
-Lists within a key mean "any of these". Under `ignore:`, plain `paths` and `teams` leave out
-individual files; inside `all:` they leave out the whole PR if it touches such a file.
-
-`teams` uses Godot's [CODEOWNERS](https://github.com/godotengine/godot/blob/master/.github/CODEOWNERS)
-file, so you can follow a team's areas without being on the team. Team members can use it instead
-of team review requests: one digest line per PR rather than every later comment and push. The
-preview lists the valid team names if you misspell one.
-
-`lines_by` and `written_lines_by` follow other people's lines, each with their own threshold, e.g. to
-take over reviewing from a maintainer who stepped down. "Lines" again means lines they wrote or
-lines from PRs they approved. Their own PRs still match.
-
-`my_lines` blames the changed lines at the PR's merge-base and honours Godot's
-`.git-blame-ignore-revs`. It isn't affected by `ignore: paths`. PRs that only add code have
-nothing to blame. If `my_lines` is too noisy, e.g. because you approve large PRs you only partly
-review, try `most_lines` (fewer, more relevant matches) or `my_written_lines`. Roughly:
+If `my_lines` is too noisy, e.g. because you approve large PRs you only partly review, try
+`most_lines` (fewer, more relevant matches) or `my_written_lines`. Measured on ~1000 past Godot PRs
+that changed existing code:
 
 | Rule | Notifications you end up reviewing | PRs you review that you hear about |
 |---|---|---|
@@ -87,9 +77,8 @@ review, try `most_lines` (fewer, more relevant matches) or `my_written_lines`. R
 | `my_written_lines: [20%, 40]` | ~1 in 3 | ~18% |
 | *For comparison: CODEOWNERS team requests* | *~1 in 10* | *~70%* |
 
-Measured on ~1000 past Godot PRs that changed existing code. Interest is more than reviewing, so
-compare rows rather than reading the numbers literally. Team requests also subscribe you to every
-later comment and push.
+Interest is more than reviewing, so compare rows rather than reading the numbers literally. Team
+requests also send you every later comment and push; `teams` gives you one digest line per PR.
 
 ## How it works
 
@@ -101,13 +90,15 @@ also serves the Pages site: the feeds, and a redirect page so Godot PRs don't ge
 backlinks. A week after notifying you, it checks whether you took part in the PR, to see whether
 this is useful.
 
+Line rules blame the changed lines at the PR's merge-base, honour Godot's
+`.git-blame-ignore-revs` and count all files, even those under `ignore: paths`. PRs that only add
+code have nothing to blame.
+
 Code is in `watcher/`. `match.py` (rules) and `index.py` (blame) are the interesting parts.
 
 ## Running your own
 
-> [!NOTE]
-> If you want to watch Godot, subscribe by opening an issue.
-> You only need to copy this repo if you want to set it up to watch another repository.
+Only needed to watch a repository other than Godot.
 
 1. Copy this repo (e.g. "Use this template"). Don't fork: forks start with scheduled workflows disabled.
 2. Set `target` in `config.yml`. If you change `label`, also change it in
@@ -130,6 +121,4 @@ GITHUB_TOKEN=$(gh auth token) .venv/bin/python -m watcher run --data ./data     
 
 ## Background
 
-Based on an analysis of ~1000 merged Godot PRs: blame and personal history predict who reviews a
-PR better than CODEOWNERS teams. Written with help from an AI assistant. The tool itself does not
-involve any AI as it runs.
+Written with help from an AI assistant. The tool itself does not involve any AI as it runs.
