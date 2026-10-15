@@ -377,6 +377,7 @@ class InvolvedTest(unittest.TestCase):
 
             def rest(self, path, params=None, method="GET", body=None):
                 self.posted.append(body["body"])
+                return {"id": 100}
 
         gh = FakeGitHub()
         with tempfile.TemporaryDirectory() as d:
@@ -396,6 +397,46 @@ class InvolvedTest(unittest.TestCase):
     def test_include_involved(self):
         posted, recorded = self.run_digest("[involved]")
         self.assertEqual(recorded, {7: None, 8: None, 9: None})
+
+
+class UpdateDigestTest(unittest.TestCase):
+    def test_done_prs_struck_through_later(self):
+        from watcher import notify
+
+        class FakeGitHub:
+            calls = []
+
+            def graphql(self, query, variables=None, attempts=4):
+                return {"repository": {}}
+
+            def rest(self, path, params=None, method="GET", body=None):
+                self.calls.append((method, path, body["body"]))
+                return {"id": 100}
+
+        gh = FakeGitHub()
+        with tempfile.TemporaryDirectory() as d:
+            st = State(Path(d))
+            st.subs = {"1": {"login": "me", "created_at": "2026-10-01T00:00:00Z", "queue": {"7": [], "8": []}}}
+            st.index = {n: pr(n=n, title=f"old {n}", files=["core/a.cpp"]) for n in (7, 8)}
+            active = {"1": {"issue": 1, "login": "me", "rules": m("paths: [core/]"), "errors": []}}
+            notify.send_digests(CFG, gh, st, active, False)
+            notify.update_digests(CFG, gh, st, False)
+            self.assertEqual(len(gh.calls), 1)  # nothing changed yet
+
+            st.index[7].update(state="closed", title="new 7")
+            st.index[8].update(title="new 8")
+            notify.update_digests(CFG, gh, st, False)
+            method, path, body = gh.calls[-1]
+            self.assertEqual((method, path), ("PATCH", "repos/example/w/issues/comments/100"))
+            self.assertIn("~~[old 7]", body)
+            self.assertIn("(closed)", body)
+            self.assertIn("- [old 8]", body)
+            self.assertNotIn("new 7", body)
+
+            notify.update_digests(CFG, gh, st, False)
+            self.assertEqual(len(gh.calls), 2)  # recorded, so not patched again
+            st.save()
+            self.assertEqual(State(Path(d)).notified[0]["digest"]["state"], "closed")
 
 
 class SubscriptionLimitTest(unittest.TestCase):

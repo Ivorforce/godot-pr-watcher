@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 from . import codeowners, render
 from .codeowners import CodeOwners
 from .config import DIGEST_PERIODS, Config
-from .gh import GitHub, GitHubError
+from .gh import GitHub, GitHubError, RateLimited
 from .index import parse_time
 from .match import diagnose, match, time_limit
 from .rules import parse_rules
@@ -18,6 +18,7 @@ log = logging.getLogger(__name__)
 MAX_SUBSCRIPTIONS = 3       # open subscription issues per person; extras are ignored
 UNLIMITED = {"OWNER", "MEMBER", "COLLABORATOR"}  # people with access to this repo have no limit
 MAX_DIGEST_ITEMS = 50       # more are only counted in the comment (they're still in the feed)
+SHOWN = ("title", "author", "draft", "state")  # PR fields kept per posted digest line, to re-render it
 MATCH_SECONDS = 5           # per subscription and run; guards against slow patterns
 EVALUATE_AFTER = timedelta(days=7)
 EVALUATE_PER_RUN = 100
@@ -174,11 +175,13 @@ def send_digests(cfg: Config, gh: GitHub, st: State, active: dict[str, dict], dr
         skip = set() if a["rules"].involved else {
             rec["n"] for rec, _ in items
             if rec.get("author") != a["login"] and a["login"] in involved.get(rec["n"], ())}
+        rows = {}
         for rec, reasons in items:
-            st.notified.append({"issue": int(key), "login": a["login"], "pr": rec["n"],
-                                "at": now.isoformat(), "reasons": [text for _, text in reasons],
-                                "kinds": sorted({kind for kind, _ in reasons}), "engaged": None,
-                                **({"skipped": "involved"} if rec["n"] in skip else {})})
+            rows[rec["n"]] = {"issue": int(key), "login": a["login"], "pr": rec["n"],
+                            "at": now.isoformat(), "reasons": [text for _, text in reasons],
+                            "kinds": sorted({kind for kind, _ in reasons}), "engaged": None,
+                            **({"skipped": "involved"} if rec["n"] in skip else {})}
+            st.notified.append(rows[rec["n"]])
         if skip:
             log.info("issue %s: skipped %d PRs the subscriber is already involved in", key, len(skip))
         items = [(rec, [text for _, text in reasons]) for rec, reasons in items if rec["n"] not in skip]
@@ -190,11 +193,49 @@ def send_digests(cfg: Config, gh: GitHub, st: State, active: dict[str, dict], dr
             print(f"--- digest for issue {key} ({a['login']}) ---\n{body}\n")
             continue
         try:
-            gh.rest(f"repos/{cfg.repo}/issues/{key}/comments", method="POST", body={"body": body})
+            comment = gh.rest(f"repos/{cfg.repo}/issues/{key}/comments", method="POST", body={"body": body})
         except GitHubError as e:
             log.warning("digest for issue %s (%d PRs) could not be posted: %s", key, len(items), e)
             continue
+        for rec, _ in items:
+            rows[rec["n"]]["digest"] = {"comment": comment["id"], **{k: rec.get(k) for k in SHOWN}}
         log.info("digest: issue %s, %d PRs", key, len(items))
+
+
+def update_digests(cfg: Config, gh: GitHub, st: State, dry_run: bool):
+    """Strike through PRs in posted digests once they're merged or closed (and undo it if one is
+    reopened). Everything else stays as posted, titles included, so a digest still reads like the
+    email it sent. Works while the PRs are in the index."""
+    by_comment = defaultdict(list)
+    for r in st.notified:
+        if "digest" in r:
+            by_comment[r["digest"]["comment"]].append(r)
+    for comment, rows in by_comment.items():
+        rows.sort(key=lambda r: r["pr"])
+        state = {r["pr"]: st.index[r["pr"]].get("state") for r in rows[:MAX_DIGEST_ITEMS]
+                 if r["pr"] in st.index and st.index[r["pr"]].get("state") != r["digest"]["state"]}
+        if not state:
+            continue
+        items = [({**r["digest"], "n": r["pr"], "state": state.get(r["pr"], r["digest"]["state"])}, r["reasons"])
+                 for r in rows]
+        body = render.digest(cfg, items[:MAX_DIGEST_ITEMS], len(items) - MAX_DIGEST_ITEMS,
+                             feed_url(cfg, rows[0]["login"]))
+        if dry_run:
+            print(f"--- updated digest {comment} on issue {rows[0]['issue']} ---\n{body}\n")
+            continue
+        try:
+            gh.rest(f"repos/{cfg.repo}/issues/comments/{comment}", method="PATCH", body={"body": body})
+        except RateLimited:
+            raise
+        except GitHubError as e:
+            log.warning("digest %s on issue %s could not be updated: %s", comment, rows[0]["issue"], e)
+            if e.status == 404:  # comment or issue deleted
+                for r in rows:
+                    del r["digest"]
+            continue
+        for r in rows:
+            r["digest"]["state"] = state.get(r["pr"], r["digest"]["state"])
+        log.info("digest %s on issue %s: %d PRs changed state", comment, rows[0]["issue"], len(state))
 
 
 def keep_alive(cfg: Config, gh: GitHub, active: dict[str, dict]):

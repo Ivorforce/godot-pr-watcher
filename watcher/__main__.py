@@ -1,6 +1,6 @@
 """godot-pr-watcher: notify subscribers about pull requests that match their rules.
 
-    python -m watcher run [--budget S] [--dry-run]          index, queue matches, send due digests
+    python -m watcher run [--budget S] [--dry-run]          index, queue matches, send due digests, update posted ones
     python -m watcher preview --issue N [--dry-run]         reply to a subscription issue
     python -m watcher preview --all [--dry-run]             refresh every subscription's preview
     python -m watcher preview --rules FILE --login LOGIN    try rules locally against the index
@@ -64,6 +64,7 @@ def main():
                 owners = stage(codeowners.load, cfg, gh) if notify.uses_teams(active) else None
                 stage(notify.queue_matches, cfg, st, active, owners)
                 stage(notify.send_digests, cfg, gh, st, active, args.dry_run, owners)
+                stage(notify.update_digests, cfg, gh, st, args.dry_run)
                 if not args.dry_run:
                     stage(notify.keep_alive, cfg, gh, active)
             stage(notify.evaluate, cfg, gh, st)

@@ -14,7 +14,8 @@ The default rules will let you know when somebody changes code you wrote or appr
 which should be useful for most users. But you can also edit the rules to your needs.
 
 - First, a bot will reply to let you know your watcher is in effect.
-- Then you'll get updates about new PRs in digests, as new comments.
+- Then you'll get updates about new PRs in digests, as new comments. PRs that are later merged
+  or closed are struck through.
 - Edit the issue to change rules, close it to stop.
 
 Rules are public. Max 3 open subscriptions per person (no limit for collaborators on this repo).
