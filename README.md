@@ -18,7 +18,7 @@ which should be useful for most users. But you can also edit the rules to your n
   or closed are struck through.
 - Edit the issue to change rules, close it to stop.
 
-Rules are public. Max 3 open subscriptions per person (no limit for collaborators on this repo).
+Since watchers are issues, rules are public. Max 3 issues per person.
 
 ## Rules
 
