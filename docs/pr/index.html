@@ -1,0 +1,8 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Redirecting…</title>
+<script>
+const n = new URLSearchParams(location.search).get("n");
+if (/^[0-9]+$/.test(n)) location.replace("https://github.com/godotengine/godot/pull/" + n);
+</script>
+<p>Redirecting to the pull request… (needs JavaScript)</p>
